@@ -1,0 +1,47 @@
+## FastAPI application entry point
+
+#Tasks
+    # create app instance
+    #configure CORS
+    # include routers
+    # create DB tables (local)
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.db.session import engine
+from app.db.base import Base
+from app.api.routes.auth import router as auth_router
+
+# Import models so SQLAlchemy "sees" them when creating metadata.
+# Without importing, Base.metadata might be missing tables.
+from app.models import user, refresh_token  # noqa: F401
+
+app = FastAPI(title="Chat Analytics API")
+
+# CORS configuration:
+    # react dev server runs on http://localhost:5173
+    # backend runs on http://localhost:8000
+
+    #cookies across origins requirements
+        #allow_credentials=tRUE
+        #allow_origins must be explicit
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router)
+
+@app.get("/health")
+def health():
+    ## endpoint to confirm server is up
+
+    return {"ok": True}
+
+#Local Table Creation
+Base.metadata.create_all(bind=engine)
