@@ -3,21 +3,24 @@ import axios from "axios";
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE,
   withCredentials: true,
+  timeout: 10000,
   headers: { "Content-Type": "application/json" },
 });
 
 // Attach access token on every request (if present)
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem("access_token");
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
-// Prevent infinite loops
+// Prevent multiple refresh requests running at once
 let isRefreshing = false;
 let queued = [];
 
-// Retry queued requests after refresh
+// Retry queued requests after refresh finishes
 function flushQueue(error, token = null) {
   queued.forEach(({ resolve, reject }) => {
     if (error) reject(error);
@@ -26,21 +29,34 @@ function flushQueue(error, token = null) {
   queued = [];
 }
 
-// Response interceptor: if 401, try refresh once and retry request
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
 
-    // If not 401 or we've already retried, just throw
-    if (error?.response?.status !== 401 || original._retry) {
+    // If there is no response at all, just reject
+    if (!error.response) {
       return Promise.reject(error);
     }
 
-    // Mark request as retried so we don't infinite loop
+    const status = error.response.status;
+    const url = original?.url || "";
+
+    // Do NOT trigger refresh flow for auth endpoints
+    const isAuthRoute =
+      url.includes("/auth/login") ||
+      url.includes("/auth/register") ||
+      url.includes("/auth/refresh") ||
+      url.includes("/auth/logout");
+
+    // Only refresh for non-auth routes that failed with 401
+    if (status !== 401 || isAuthRoute || original._retry) {
+      return Promise.reject(error);
+    }
+
     original._retry = true;
 
-    // If a refresh is already in progress, wait for it
+    // If another refresh is already happening, wait for it
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         queued.push({
@@ -56,21 +72,16 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      // Call refresh endpoint (cookie is sent automatically withCredentials)
       const res = await api.post("/auth/refresh");
-
       const newToken = res.data.access_token;
-      sessionStorage.setItem("access_token", newToken);
 
+      sessionStorage.setItem("access_token", newToken);
       flushQueue(null, newToken);
 
-      // Retry original request with new token
       original.headers.Authorization = `Bearer ${newToken}`;
       return api(original);
     } catch (refreshErr) {
       flushQueue(refreshErr, null);
-
-      // If refresh fails, clear token and force user to login
       sessionStorage.removeItem("access_token");
       return Promise.reject(refreshErr);
     } finally {

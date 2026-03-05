@@ -72,7 +72,7 @@ def login(data: LoginIn, resp: Response, db: Session = Depends(get_db)):
 
     user = authenticate_user(db, data.email, data.password)
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
     
     access, refresh = issue_tokens(db, user)
     set_refresh_cookie(resp, refresh)
@@ -88,7 +88,7 @@ def refresh(req: Request, resp: Response, db: Session = Depends(get_db)):
         # return new access token
     token = req.cookies.get(REFRESH_COOKIE)
     if not token:
-        raise HTTPException(status_code=401, DETAIL="Missing refresh token")
+        raise HTTPException(status_code=401, detail="Missing refresh token")
     try:
         access, new_refresh = rotate_refresh(db, token)
     except Exception:
