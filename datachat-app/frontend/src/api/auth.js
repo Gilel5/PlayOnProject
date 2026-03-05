@@ -3,15 +3,31 @@ import { api } from "./http";
 // res.data : whatever JSON the server returns
 
 //Helper: extract a message from axios errors
+// Helper to extract a friendly message from axios/FastAPI errors
 function getAxiosErrorMessage(err) {
-    //Axios puts server responses in err.response
-    // FastAPI often returns { detail: "..."}\
-    return (
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message ||
-        "Request failed"
-    );
+  const detail = err?.response?.data?.detail;
+
+  // FastAPI validation errors often come back as an array
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((item) => item.msg).join(", ");
+  }
+
+  // Sometimes detail is already a string
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  // Other APIs may return "message"
+  if (typeof err?.response?.data?.message === "string") {
+    return err.response.data.message;
+  }
+
+  // Generic axios message fallback
+  if (typeof err?.message === "string") {
+    return err.message;
+  }
+
+  return "Request failed";
 }
 
 export async function register(email, password) {
@@ -59,7 +75,7 @@ export async function me(accessToken) {
         });
         return res.data;
     } catch (err) {
-        throw new Error(getAxiosErrorMessage);
+        throw new Error(getAxiosErrorMessage(err));
     }
 }
 
