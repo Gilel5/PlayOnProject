@@ -101,4 +101,4 @@ def revoke_refresh(db: Session, refresh_token: str) -> None:
 
     if row and row.revoked_at is None:
         row.revoked_at = datetime.now(timezone.utc)
-        db.commit
+        db.commit()
