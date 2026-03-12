@@ -1,4 +1,6 @@
-export default function BotMessage({ children }) {
+import PdfAttachment from "../PdfAttachment";
+
+export default function BotMessage({ text, attachment }) {
   return (
     <div className="flex items-start gap-3">
       <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -12,7 +14,10 @@ export default function BotMessage({ children }) {
           />
         </svg>
       </div>
-      <div className="max-w-lg text-sm text-gray-800">{children}</div>
+      <div className="max-w-lg text-sm text-gray-800">
+        <p className="mb-2">{text}</p>
+        {attachment && <PdfAttachment name={attachment} />}
+      </div>
     </div>
   );
 }
