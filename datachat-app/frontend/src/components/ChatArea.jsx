@@ -2,8 +2,8 @@ import { useRef } from "react";
 import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp } from "lucide-react";
 import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
-import PdfAttachment from "./PdfAttachment";
 import File from "./File";
+
 
 export default function ChatArea({
   messages,
@@ -18,12 +18,18 @@ export default function ChatArea({
 }) {
   const messagesEndRef = useRef(null);
 
+  console.log("ChatArea messages details:", messages); // Debug - show full structure
+  console.log("Message roles:", messages.map(m => ({ id: m.id, role: m.role })));
+
   function handleKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       setInput("");
     }
   }
+
+  console.log("ChatArea messages:", messages); // Debug log
+  console.log("Input value:", input); // Debug log
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
@@ -77,10 +83,7 @@ export default function ChatArea({
           msg.role === "user" ? (
             <UserMessage key={msg.id} text={msg.text} />
           ) : (
-            <BotMessage key={msg.id}>
-              <p className="mb-2">{msg.text}</p>
-              {msg.attachment && <PdfAttachment name={msg.attachment} />}
-            </BotMessage>
+            <BotMessage key={msg.id} text={msg.text} attachment={msg.attachment} />
           )
         )}
         <div ref={messagesEndRef} />

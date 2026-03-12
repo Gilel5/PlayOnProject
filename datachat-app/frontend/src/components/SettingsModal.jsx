@@ -1,9 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react";
 import { ARCHIVED } from "../data/mockData";
 
 export default function SettingsModal({ user, onClose, onLogout }) {
   const [darkMode, setDarkMode] = useState(true);
+  // track which archived item's menu is open (name acts as key)
+  const [openMenu, setOpenMenu] = useState(null);
+  const modalRef = useRef(null);
+  const menuRef = useRef(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Don't close if clicking on the menu button itself
+      if (event.target.closest('[data-menu-button]')) return;
+
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpenMenu(null);
+      }
+    };
+
+    if (openMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openMenu]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -11,7 +35,7 @@ export default function SettingsModal({ user, onClose, onLogout }) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+      <div ref={modalRef} className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
@@ -110,13 +134,26 @@ export default function SettingsModal({ user, onClose, onLogout }) {
             <div className="border-t border-gray-100" />
             <div className="mt-3 space-y-2">
               {ARCHIVED.map((item) => (
-                <div key={item.name} className="flex items-center justify-between py-2">
+                <div key={item.name} className="flex items-center justify-between py-2 relative">
                   <span className="text-sm text-gray-700">{item.name}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-gray-400">Archive Date: {item.date}</span>
-                    <button className="p-1 hover:bg-gray-100 rounded">
+                    <button
+                      data-menu-button
+                      className="p-1 hover:bg-gray-100 rounded"
+                      onClick={() => setOpenMenu(openMenu === item.name ? null : item.name)}
+                    >
                       <MoreHorizontal size={14} className="text-gray-400" />
                     </button>
+
+                    {openMenu === item.name && (
+                      <div ref={menuRef} className="absolute right-0 mt-12 w-32 bg-white border border-gray-200 rounded shadow-lg z-20" onClick={(e) => e.stopPropagation()}>
+                        <button className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100" onClick={(e) => e.stopPropagation()}>
+                          Restore
+                        </button>
+                        
+                      </div>
+                    )} 
                   </div>
                 </div>
               ))}
