@@ -13,12 +13,14 @@ from app.db.session import engine
 from app.db.base import Base
 from app.api.routes.auth import router as auth_router
 
+from app.api import chat_sessions
+
 # Import models so SQLAlchemy "sees" them when creating metadata.
 # Without importing, Base.metadata might be missing tables.
 from app.models import user, refresh_token, chat_session  # noqa: F401
 
 app = FastAPI(title="Chat Analytics API")
-
+app.include_router(chat_sessions.router)
 # CORS configuration:
     # react dev server runs on http://localhost:5173
     # backend runs on http://localhost:8000
