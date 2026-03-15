@@ -60,7 +60,7 @@ export default function RightPanel() {
             {BAR_HEIGHTS.map((h, i) => (
               <div
                 key={i}
-                className="flex-1 bg-teal-400 rounded-t-sm opacity-90 hover:opacity-100 transition-opacity"
+                className="flex-1 bg-[#5BC5D0] rounded-t-sm opacity-90 hover:opacity-100 transition-opacity"
                 style={{ height: `${h}%` }}
               />
             ))}

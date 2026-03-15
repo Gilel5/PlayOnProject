@@ -41,11 +41,11 @@ export default function ChatArea({
                 <Menu size={18} className="text-gray-600" />
               </button>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-teal-300 text-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-8 h-8 rounded-lg bg-[#5BC5D0] text-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                     <path
                       d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                      stroke="#0d9488"
+                      stroke="black"
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -74,7 +74,7 @@ export default function ChatArea({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
         {messages.map((msg) =>
           msg.role === "user" ? (
             <UserMessage key={msg.id} text={msg.text} />
@@ -88,7 +88,7 @@ export default function ChatArea({
         {isLoading && (
           <BotMessage>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
               <p>Thinking...</p>
             </div>
           </BotMessage>

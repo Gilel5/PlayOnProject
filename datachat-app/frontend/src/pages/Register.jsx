@@ -29,7 +29,7 @@ export default function Register() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-10 h-10 bg-teal-400 rounded-xl flex items-center justify-center mb-3 shadow-sm">
+          <div className="w-10 h-10 bg-[#5BC5D0] rounded-xl flex items-center justify-center mb-3 shadow-sm">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -49,7 +49,7 @@ export default function Register() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 required
-                className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all placeholder-gray-400"
+                className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#5BC5D0] focus:border-transparent transition-all placeholder-gray-400"
               />
             </div>
 
@@ -61,7 +61,7 @@ export default function Register() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition-all placeholder-gray-400"
+                className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#5BC5D0] focus:border-transparent transition-all placeholder-gray-400"
               />
             </div>
 
@@ -81,7 +81,7 @@ export default function Register() {
 
         <p className="text-center text-sm text-gray-500 mt-4">
           Already have an account?{" "}
-          <Link to="/login" className="text-teal-600 font-medium hover:text-teal-700">
+          <Link to="/login" className="text-[#5BC5D0] font-medium hover:text-[#5BC5D0]">
             Sign in
           </Link>
         </p>
