@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { me, refresh, logout as logoutApi } from "../api/auth";
+import { sendChatMessage } from "../api/chat";
 
 import Sidebar from "../components/Sidebar";
 import ChatArea from "../components/ChatArea";
 import RightPanel from "../components/RightPanel";
 import SettingsModal from "../components/SettingsModal";
 
-const DEMO_MESSAGES = [
-  { id: 1, role: "user", text: "Can you show me subscription data for January?" },
-  {
-    id: 2,
-    role: "bot",
-    text: "Sure. Here is a pdf comparing financial reports from January 2026 and January 2025",
-    attachment: "Jan 2026 vs Jan 2025 Report.pdf",
-  },
+const INITIAL_MESSAGES = [
+  { id: 1, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?" },
 ];
 
 export default function AppHome() {
@@ -24,10 +19,11 @@ export default function AppHome() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [activeChat, setActiveChat] = useState("Subscriptions Jan 2026 vs Jan 2025");
+  const [activeChat, setActiveChat] = useState("New Chat");
   const [input, setInput] = useState("");
-  const [files, setFiles] = useState(["Jan 2026", "Jan 2025"]);
-  const [messages] = useState(DEMO_MESSAGES);
+  const [files, setFiles] = useState([]);
+  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [isLoading, setIsLoading] = useState(false);
 
   async function getAccessToken() {
     const existing = sessionStorage.getItem("access_token");
@@ -60,6 +56,26 @@ export default function AppHome() {
     setFiles((prev) => prev.filter((t) => t !== label));
   }
 
+  async function sendMessage(text) {
+    if (!text.trim()) return;
+
+    const userMessage = { id: Date.now(), role: "user", text };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+
+    try {
+      const response = await sendChatMessage(text);
+      const botMessage = { id: Date.now() + 1, role: "bot", text: response.reply };
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      const errorMessage = { id: Date.now() + 1, role: "bot", text: "Sorry, I couldn't process your message. Please try again." };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
@@ -89,6 +105,8 @@ export default function AppHome() {
         setInput={setInput}
         files={files}
         removeFile={removeFile}
+        sendMessage={sendMessage}
+        isLoading={isLoading}
         sidebarOpen={sidebarOpen}
         onSidebarOpen={() => setSidebarOpen(true)}
         rightPanelOpen={rightPanelOpen}

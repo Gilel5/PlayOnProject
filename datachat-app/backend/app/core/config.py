@@ -25,6 +25,9 @@ class Settings(BaseSettings):
         #cookie domain (leave blank until prod)
         COOKIE_DOMAIN: str | None = None
 
+        # OpenAI api key
+        OPENAI_API_KEY: str
+
         class Config:
                 # Load settings from .env files
                 env_file = ".env"

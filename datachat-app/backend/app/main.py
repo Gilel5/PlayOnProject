@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.session import engine
 from app.db.base import Base
 from app.api.routes.auth import router as auth_router
+from app.api.routes.chat import router as chat_router
 
 # Import models so SQLAlchemy "sees" them when creating metadata.
 # Without importing, Base.metadata might be missing tables.
@@ -36,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(chat_router)
 
 @app.get("/health")
 def health():

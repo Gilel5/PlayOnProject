@@ -11,6 +11,8 @@ export default function ChatArea({
   setInput,
   files,
   removeFile,
+  sendMessage,
+  isLoading,
   sidebarOpen,
   onSidebarOpen,
   rightPanelOpen,
@@ -21,7 +23,7 @@ export default function ChatArea({
   function handleKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      setInput("");
+      sendMessage(input);
     }
   }
 
@@ -83,6 +85,14 @@ export default function ChatArea({
             </BotMessage>
           )
         )}
+        {isLoading && (
+          <BotMessage>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+              <p>Thinking...</p>
+            </div>
+          </BotMessage>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -109,10 +119,10 @@ export default function ChatArea({
               <Paperclip size={16} />
             </button>
             <button
-              onClick={() => setInput("")}
-              disabled={!input.trim()}
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || isLoading}
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                input.trim()
+                input.trim() && !isLoading
                   ? "bg-gray-800 text-white hover:bg-gray-900"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
