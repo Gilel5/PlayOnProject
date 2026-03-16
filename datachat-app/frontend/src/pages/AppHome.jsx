@@ -7,6 +7,7 @@ import {
   getUserSessions,
   pinSession,
   deleteSession,
+  renameSession,
 } from "../api/chatSessions";
 
 import Sidebar from "../components/Sidebar";
@@ -14,9 +15,6 @@ import ChatArea from "../components/ChatArea";
 import RightPanel from "../components/RightPanel";
 import SettingsModal from "../components/SettingsModal";
 
-const INITIAL_MESSAGES = [
-  { id: 1, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?" },
-];
 
 export default function AppHome() {
   const nav = useNavigate();
@@ -28,7 +26,7 @@ export default function AppHome() {
   const [activeChat, setActiveChat] = useState("New Chat");
   const [input, setInput] = useState("");
   const [files, setFiles] = useState([]);
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [messagesMap, setMessagesMap] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
@@ -70,20 +68,40 @@ export default function AppHome() {
   }
 
   async function sendMessage(text) {
-    if (!text.trim()) return;
+    if (!text.trim() || !activeChatId) return;
 
+    // Add the user's message to the active chat immediately (optimistic update)
     const userMessage = { id: Date.now(), role: "user", text };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessagesMap((prev) => ({
+      ...prev,
+      [activeChatId]: [...(prev[activeChatId] || [WELCOME_MESSAGE]), userMessage],
+    }));
     setInput("");
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(text);
+      // Send the message to the backend along with the session ID
+      const response = await sendChatMessage(text, activeChatId);
       const botMessage = { id: Date.now() + 1, role: "bot", text: response.reply };
-      setMessages((prev) => [...prev, botMessage]);
-    } catch (error) {
+
+      // Append the bot's reply to the active chat's message history
+      setMessagesMap((prev) => ({
+        ...prev,
+        [activeChatId]: [...(prev[activeChatId] || []), botMessage],
+      }));
+
+      // Refresh the sessions list so the sidebar reflects the updated last_message_at order
+      if (user?.id) {
+        const fresh = await getUserSessions(user.id);
+        setSessions(fresh);
+      }
+    } catch {
+      // Show an error message in the chat if the request fails
       const errorMessage = { id: Date.now() + 1, role: "bot", text: "Sorry, I couldn't process your message. Please try again." };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessagesMap((prev) => ({
+        ...prev,
+        [activeChatId]: [...(prev[activeChatId] || []), errorMessage],
+      }));
     } finally {
       setIsLoading(false);
     }
@@ -140,6 +158,25 @@ export default function AppHome() {
     }
   }
 
+  async function handleRenameChat(sessionId, newTitle) {
+    if (!newTitle.trim()) return;
+    try {
+      // Update the title in the DB
+      await renameSession(sessionId, newTitle);
+      // Update the sessions list in state so the sidebar reflects the new name
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId ? { ...session, chat_title: newTitle } : session
+        )
+      );
+    } catch (error) {
+      console.error("Failed to rename chat", error);
+    }
+  }
+
+  const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
+  const messages = activeChatId ? (messagesMap[activeChatId] || [WELCOME_MESSAGE]) : [WELCOME_MESSAGE];
+
   if (!user) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
@@ -162,6 +199,7 @@ export default function AppHome() {
           onCreateChat={handleCreateChat}
           onTogglePin={handleTogglePin}
           onDeleteChat={handleDeleteChat}
+          onRenameChat={handleRenameChat}
           onClose={() => setSidebarOpen(false)}
           onSettingsOpen={() => setShowSettings(true)}
         />
