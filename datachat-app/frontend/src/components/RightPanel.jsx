@@ -10,13 +10,21 @@ const LEGEND = [
 
 const BAR_HEIGHTS = [65, 90, 75, 100, 95, 80, 110, 88, 92, 85, 105, 78];
 
-export default function RightPanel() {
+export default function RightPanel({ onClose }) {
   return (
     <aside className="w-96 flex-shrink-0 border-l border-gray-100 bg-white flex flex-col h-full overflow-y-auto">
-      <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
-        <LayoutTemplate size={18} className="text-gray-500" />
-        <button className="p-1 rounded hover:bg-gray-100">
-          <ExternalLink size={15} className="text-gray-400" />
+      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-white text-gray-900 flex items-center justify-center flex-shrink-0 transition-colors"
+          >
+            <LayoutTemplate size={16} />
+          </button>
+          <span className="font-semibold text-gray-900 text-sm">Analytics</span>
+        </div>
+        <button className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+          <ExternalLink size={18} className="text-black" />
         </button>
       </div>
 
