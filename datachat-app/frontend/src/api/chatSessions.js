@@ -42,3 +42,14 @@ export async function deleteSession(sessionId) {
   }
   return await res.json();
 }
+
+export async function renameSession(sessionId, title) {
+  const res = await fetch(`${API_URL}/chat_sessions/${sessionId}/title?title=${encodeURIComponent(title)}`, {
+    method: "PUT"
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to rename chat session");
+  }
+  return await res.json();
+}
