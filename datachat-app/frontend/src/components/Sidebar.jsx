@@ -10,14 +10,21 @@ export default function Sidebar({
   onCreateChat,
   onTogglePin,
   onDeleteChat,
+  onRenameChat,
   onClose,
   onSettingsOpen,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [openMenu, setOpenMenu] = useState(null);
+  // Position of the dropdown menu (fixed to avoid being clipped by overflow container)
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  // Tracks which session is being renamed and the current input value
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
   const sidebarRef = useRef(null);
+  const renameInputRef = useRef(null);
 
-  // Close menu when clicking outside
+  // Close menu when clicking outside the sidebar
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
@@ -34,11 +41,49 @@ export default function Sidebar({
     };
   }, [openMenu]);
 
+  // Focus and select the rename input text when it appears
+  useEffect(() => {
+    if (renamingId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingId]);
+
+  // Open the context menu — calculate fixed position from the button's location
+  // so the dropdown is not clipped by the overflow-y-auto scroll container
+  function handleMenuOpen(e, chatId) {
+    e.stopPropagation();
+    if (openMenu === chatId) {
+      setOpenMenu(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPosition({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    setOpenMenu(chatId);
+  }
+
+  function startRename(chat) {
+    setRenamingId(chat.id);
+    setRenameValue(chat.chat_title);
+    setOpenMenu(null);
+  }
+
+  function submitRename(sessionId) {
+    if (renameValue.trim()) {
+      onRenameChat(sessionId, renameValue.trim());
+    }
+    setRenamingId(null);
+    setRenameValue("");
+  }
+
   const filteredSessions = sessions.filter((session) =>
     session.chat_title.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const filteredPinned = filteredSessions.filter((session) => session.is_pinned);
   const filteredChats = filteredSessions.filter((session) => !session.is_pinned);
+
+  // The session whose context menu is currently open
+  const activeMenuSession = sessions.find((s) => s.id === openMenu);
 
   return (
     <aside ref={sidebarRef} className="w-72 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col h-full">
@@ -93,50 +138,36 @@ export default function Sidebar({
             </p>
             {filteredPinned.map((chat) => (
               <div key={chat.id} className="relative group">
-                <button
-                  onClick={() => {
-                    onSelectChat(chat.id);
-                    setOpenMenu(null);
-                  }}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors pr-10 ${
-                    activeChatId === chat.id
-                      ? "bg-gray-100 text-gray-900 font-medium"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="truncate block">{chat.chat_title}</span>
-                </button>
-                <button
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenu(openMenu === chat.id ? null : chat.id);
-                  }}
-                >
-                  <MoreHorizontal size={14} className="text-gray-400" />
-                </button>
-
-                {openMenu === chat.id && (
-                  <div className="absolute right-0 top-full mb-1 w-32 bg-white border border-gray-200 rounded shadow-lg z-20">
-                    <button
-                      onClick={() => {
-                        onTogglePin(chat.id);
-                        setOpenMenu(null);
-                      }}
-                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
-                    >
-                      Unpin Chat
-                    </button>
-                    <button
-                      onClick={() => {
-                        onDeleteChat(chat.id);
-                        setOpenMenu(null);
-                      }}
-                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
-                    >
-                      Delete Chat
-                    </button>
-                  </div>
+                {renamingId === chat.id ? (
+                  // Inline rename input replaces the title button while renaming
+                  <input
+                    ref={renameInputRef}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => submitRename(chat.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitRename(chat.id);
+                      if (e.key === "Escape") { setRenamingId(null); setRenameValue(""); }
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm border border-[#5BC5D0] outline-none bg-white"
+                  />
+                ) : (
+                  <button
+                    onClick={() => { onSelectChat(chat.id); setOpenMenu(null); }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors pr-10 ${
+                      activeChatId === chat.id ? "bg-gray-100 text-gray-900 font-medium" : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className="truncate block">{chat.chat_title}</span>
+                  </button>
+                )}
+                {renamingId !== chat.id && (
+                  <button
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => handleMenuOpen(e, chat.id)}
+                  >
+                    <MoreHorizontal size={14} className="text-gray-400" />
+                  </button>
                 )}
               </div>
             ))}
@@ -149,56 +180,69 @@ export default function Sidebar({
             </p>
             {filteredChats.map((chat) => (
               <div key={chat.id} className="relative group">
-                <button
-                  onClick={() => {
-                    onSelectChat(chat.id);
-                    setOpenMenu(null);
-                  }}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors pr-10 ${
-                    activeChatId === chat.id
-                      ? "bg-gray-100 text-gray-900 font-medium"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="truncate block">{chat.chat_title}</span>
-                </button>
-                <button
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenu(openMenu === chat.id ? null : chat.id);
-                  }}
-                >
-                  <MoreHorizontal size={14} className="text-gray-400" />
-                </button>
-
-                {openMenu === chat.id && (
-                  <div className="absolute right-0 bottom-full mb-1 w-32 bg-white border border-gray-200 rounded shadow-lg z-20">
-                    <button
-                      onClick={() => {
-                        onTogglePin(chat.id);
-                        setOpenMenu(null);
-                      }}
-                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
-                    >
-                      Pin Chat
-                    </button>
-                    <button
-                      onClick={() => {
-                        onDeleteChat(chat.id);
-                        setOpenMenu(null);
-                      }}
-                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
-                    >
-                      Delete Chat
-                    </button>
-                  </div>
+                {renamingId === chat.id ? (
+                  // Inline rename input replaces the title button while renaming
+                  <input
+                    ref={renameInputRef}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={() => submitRename(chat.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitRename(chat.id);
+                      if (e.key === "Escape") { setRenamingId(null); setRenameValue(""); }
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm border border-[#5BC5D0] outline-none bg-white"
+                  />
+                ) : (
+                  <button
+                    onClick={() => { onSelectChat(chat.id); setOpenMenu(null); }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors pr-10 ${
+                      activeChatId === chat.id ? "bg-gray-100 text-gray-900 font-medium" : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    <span className="truncate block">{chat.chat_title}</span>
+                  </button>
+                )}
+                {renamingId !== chat.id && (
+                  <button
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => handleMenuOpen(e, chat.id)}
+                  >
+                    <MoreHorizontal size={14} className="text-gray-400" />
+                  </button>
                 )}
               </div>
-            ))} 
+            ))}
           </div>
         )}
       </div>
+
+      {/* Context menu — rendered with fixed position so it is never clipped by the scroll container */}
+      {openMenu && activeMenuSession && (
+        <div
+          style={{ position: "fixed", top: menuPosition.top, right: menuPosition.right }}
+          className="w-36 bg-white border border-gray-200 rounded shadow-lg z-50"
+        >
+          <button
+            onClick={() => startRename(activeMenuSession)}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+          >
+            Rename Chat
+          </button>
+          <button
+            onClick={() => { onTogglePin(openMenu); setOpenMenu(null); }}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+          >
+            {activeMenuSession.is_pinned ? "Unpin Chat" : "Pin Chat"}
+          </button>
+          <button
+            onClick={() => { onDeleteChat(openMenu); setOpenMenu(null); }}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+          >
+            Delete Chat
+          </button>
+        </div>
+      )}
 
       {/* User + settings */}
       <div className="border-t border-gray-100 px-3 py-3 flex items-center justify-between">
