@@ -13,10 +13,11 @@ from app.db.session import engine
 from app.db.base import Base
 from app.api.routes.auth import router as auth_router
 from app.api.routes.chat import router as chat_router
+from app.api.chat_sessions import router as chat_sessions_router
 
 # Import models so SQLAlchemy "sees" them when creating metadata.
 # Without importing, Base.metadata might be missing tables.
-from app.models import user, refresh_token  # noqa: F401
+from app.models import user, refresh_token, chat_session  # noqa: F401
 
 app = FastAPI(title="Chat Analytics API")
 
@@ -38,6 +39,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(chat_sessions_router)
 
 @app.get("/health")
 def health():
