@@ -74,7 +74,7 @@ export default function ChatArea({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
         {messages.map((msg) =>
           msg.role === "user" ? (
             <UserMessage key={msg.id} text={msg.text} />
@@ -84,6 +84,14 @@ export default function ChatArea({
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
           )
+        )}
+        {isLoading && (
+          <BotMessage>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
+              <p>Thinking...</p>
+            </div>
+          </BotMessage>
         )}
         {isLoading && (
           <BotMessage>

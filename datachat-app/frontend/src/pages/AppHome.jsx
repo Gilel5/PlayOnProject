@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { me, refresh, logout as logoutApi } from "../api/auth";
 import { sendChatMessage } from "../api/chat";
+import {
+  createChatSession,
+  getUserSessions,
+  pinSession,
+  deleteSession,
+} from "../api/chatSessions";
 
 import Sidebar from "../components/Sidebar";
 import ChatArea from "../components/ChatArea";
@@ -24,6 +30,8 @@ export default function AppHome() {
   const [files, setFiles] = useState([]);
   const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [activeChatId, setActiveChatId] = useState(null);
 
   async function getAccessToken() {
     const existing = sessionStorage.getItem("access_token");
@@ -39,6 +47,11 @@ export default function AppHome() {
         const token = await getAccessToken();
         const u = await me(token);
         setUser(u);
+        const userSessions = await getUserSessions(u.id);
+        setSessions(userSessions);
+        if (userSessions.length > 0) {
+          setActiveChatId(userSessions[0].id);
+        }
       } catch {
         nav("/login");
       }
@@ -76,6 +89,57 @@ export default function AppHome() {
     }
   }
 
+  async function handleCreateChat() {
+    if (!user) return;
+    try {
+      const newSession = await createChatSession(user.id);
+      setSessions((prev) => [newSession, ...prev]);
+      setActiveChatId(newSession.id);
+    } catch (error) {
+      console.error("Failed to create chat", error);
+    }
+  }
+
+  async function handleTogglePin(sessionId) {
+    // Optimistic update so the UI responds instantly.
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === sessionId ? { ...session, is_pinned: !session.is_pinned } : session
+      )
+    );
+
+    try {
+      await pinSession(sessionId);
+      if (user?.id) {
+        const freshSessions = await getUserSessions(user.id);
+        setSessions(freshSessions);
+      }
+    } catch (error) {
+      // Revert optimistic state if backend update fails.
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === sessionId ? { ...session, is_pinned: !session.is_pinned } : session
+        )
+      );
+      console.error("Failed to toggle pin", error);
+    }
+  }
+
+  async function handleDeleteChat(sessionId) {
+    try {
+      await deleteSession(sessionId);
+      setSessions((prev) => {
+        const next = prev.filter((session) => session.id !== sessionId);
+        if (activeChatId === sessionId) {
+          setActiveChatId(next.length > 0 ? next[0].id : null);
+        }
+        return next;
+      });
+    } catch (error) {
+      console.error("Failed to delete chat", error);
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
@@ -92,8 +156,12 @@ export default function AppHome() {
       {sidebarOpen && (
         <Sidebar
           user={user}
-          activeChat={activeChat}
-          setActiveChat={setActiveChat}
+          sessions={sessions}
+          activeChatId={activeChatId}
+          onSelectChat={setActiveChatId}
+          onCreateChat={handleCreateChat}
+          onTogglePin={handleTogglePin}
+          onDeleteChat={handleDeleteChat}
           onClose={() => setSidebarOpen(false)}
           onSettingsOpen={() => setShowSettings(true)}
         />

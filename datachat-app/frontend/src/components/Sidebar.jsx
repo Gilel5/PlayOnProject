@@ -1,19 +1,47 @@
-import { Menu, Plus, Search, Settings, User } from "lucide-react";
-import { PINNED_CHATS, CHATS } from "../data/mockData";
-import { useState } from "react";
+import { Menu, Plus, Search, Settings, User, MoreHorizontal } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 
-export default function Sidebar({ user, activeChat, setActiveChat, onClose, onSettingsOpen }) {
+
+export default function Sidebar({
+  user,
+  sessions,
+  activeChatId,
+  onSelectChat,
+  onCreateChat,
+  onTogglePin,
+  onDeleteChat,
+  onClose,
+  onSettingsOpen,
+}) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [openMenu, setOpenMenu] = useState(null);
+  const sidebarRef = useRef(null);
 
-  const filteredPinned = PINNED_CHATS.filter((c) =>
-    c.toLowerCase().includes(searchQuery.toLowerCase())
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+        setOpenMenu(null);
+      }
+    };
+
+    if (openMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openMenu]);
+
+  const filteredSessions = sessions.filter((session) =>
+    session.chat_title.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filteredChats = CHATS.filter((c) =>
-    c.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPinned = filteredSessions.filter((session) => session.is_pinned);
+  const filteredChats = filteredSessions.filter((session) => !session.is_pinned);
 
   return (
-    <aside className="w-72 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col h-full">
+    <aside ref={sidebarRef} className="w-72 flex-shrink-0 bg-white border-r border-gray-100 flex flex-col h-full">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
         <div className="flex items-center gap-2">
@@ -38,7 +66,7 @@ export default function Sidebar({ user, activeChat, setActiveChat, onClose, onSe
             <span className="font-semibold text-gray-900 text-sm">DataChat</span>
           </div>
         </div>
-        <button className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+        <button onClick={onCreateChat} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
           <Plus size={18} className="text-gray-600" />
         </button>
       </div>
@@ -64,17 +92,53 @@ export default function Sidebar({ user, activeChat, setActiveChat, onClose, onSe
               Pinned Chats
             </p>
             {filteredPinned.map((chat) => (
-              <button
-                key={chat}
-                onClick={() => setActiveChat(chat)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                  activeChat === chat
-                    ? "bg-gray-100 text-gray-900 font-medium"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                {chat}
-              </button>
+              <div key={chat.id} className="relative group">
+                <button
+                  onClick={() => {
+                    onSelectChat(chat.id);
+                    setOpenMenu(null);
+                  }}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors pr-10 ${
+                    activeChatId === chat.id
+                      ? "bg-gray-100 text-gray-900 font-medium"
+                      : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="truncate block">{chat.chat_title}</span>
+                </button>
+                <button
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenu(openMenu === chat.id ? null : chat.id);
+                  }}
+                >
+                  <MoreHorizontal size={14} className="text-gray-400" />
+                </button>
+
+                {openMenu === chat.id && (
+                  <div className="absolute right-0 top-full mb-1 w-32 bg-white border border-gray-200 rounded shadow-lg z-20">
+                    <button
+                      onClick={() => {
+                        onTogglePin(chat.id);
+                        setOpenMenu(null);
+                      }}
+                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                    >
+                      Unpin Chat
+                    </button>
+                    <button
+                      onClick={() => {
+                        onDeleteChat(chat.id);
+                        setOpenMenu(null);
+                      }}
+                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                    >
+                      Delete Chat
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -84,18 +148,54 @@ export default function Sidebar({ user, activeChat, setActiveChat, onClose, onSe
               Chats
             </p>
             {filteredChats.map((chat) => (
-              <button
-                key={chat}
-                onClick={() => setActiveChat(chat)}
-                className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                  activeChat === chat
-                    ? "bg-gray-100 text-gray-900 font-medium"
-                    : "text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                {chat}
-              </button>
-            ))}
+              <div key={chat.id} className="relative group">
+                <button
+                  onClick={() => {
+                    onSelectChat(chat.id);
+                    setOpenMenu(null);
+                  }}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors pr-10 ${
+                    activeChatId === chat.id
+                      ? "bg-gray-100 text-gray-900 font-medium"
+                      : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="truncate block">{chat.chat_title}</span>
+                </button>
+                <button
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenu(openMenu === chat.id ? null : chat.id);
+                  }}
+                >
+                  <MoreHorizontal size={14} className="text-gray-400" />
+                </button>
+
+                {openMenu === chat.id && (
+                  <div className="absolute right-0 bottom-full mb-1 w-32 bg-white border border-gray-200 rounded shadow-lg z-20">
+                    <button
+                      onClick={() => {
+                        onTogglePin(chat.id);
+                        setOpenMenu(null);
+                      }}
+                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                    >
+                      Pin Chat
+                    </button>
+                    <button
+                      onClick={() => {
+                        onDeleteChat(chat.id);
+                        setOpenMenu(null);
+                      }}
+                      className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                    >
+                      Delete Chat
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))} 
           </div>
         )}
       </div>
