@@ -219,7 +219,7 @@ export default function AppHome() {
         onRightPanelToggle={() => setRightPanelOpen((prev) => !prev)}
       />
 
-      {rightPanelOpen && <RightPanel />}
+      {rightPanelOpen && <RightPanel onClose={() => setRightPanelOpen(false)} />}
 
       {showSettings && (
         <SettingsModal

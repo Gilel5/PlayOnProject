@@ -163,10 +163,10 @@ export default function Sidebar({
                 )}
                 {renamingId !== chat.id && (
                   <button
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded"
                     onClick={(e) => handleMenuOpen(e, chat.id)}
                   >
-                    <MoreHorizontal size={14} className="text-gray-400" />
+                    <MoreHorizontal size={14} className="text-black" />
                   </button>
                 )}
               </div>
@@ -205,10 +205,10 @@ export default function Sidebar({
                 )}
                 {renamingId !== chat.id && (
                   <button
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded"
                     onClick={(e) => handleMenuOpen(e, chat.id)}
                   >
-                    <MoreHorizontal size={14} className="text-gray-400" />
+                    <MoreHorizontal size={14} className="text-black" />
                   </button>
                 )}
               </div>
