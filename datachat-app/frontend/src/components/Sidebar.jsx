@@ -98,7 +98,7 @@ export default function Sidebar({
             <Menu size={18} className="text-gray-600" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#5BC5D0] text-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <div className="w-8 h-6 rounded-lg bg-[#5BC5D0] text-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
