@@ -53,3 +53,34 @@ export async function renameSession(sessionId, title) {
   }
   return await res.json();
 }
+
+export async function archiveSession(sessionId) {
+  const res = await fetch(`${API_URL}/chat_sessions/${sessionId}/archive`, {
+    method: "PUT"
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to archive chat session");
+  }
+  return await res.json();
+}
+
+export async function restoreSession(sessionId) {
+  const res = await fetch(`${API_URL}/chat_sessions/${sessionId}/restore`, {
+    method: "PUT"
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to restore chat session");
+  }
+  return await res.json();
+}
+
+export async function getArchivedSessions(userId) {
+  const res = await fetch(`${API_URL}/chat_sessions/user/${userId}/archived`);
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch archived sessions");
+  }
+  return await res.json();
+}

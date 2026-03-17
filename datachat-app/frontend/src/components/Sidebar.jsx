@@ -11,6 +11,7 @@ export default function Sidebar({
   onTogglePin,
   onDeleteChat,
   onRenameChat,
+  onArchiveChat,
   onClose,
   onSettingsOpen,
 }) {
@@ -234,6 +235,12 @@ export default function Sidebar({
             className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
           >
             {activeMenuSession.is_pinned ? "Unpin Chat" : "Pin Chat"}
+          </button>
+          <button
+            onClick={() => { onArchiveChat(openMenu); setOpenMenu(null); }}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+          >
+            Archive Chat
           </button>
           <button
             onClick={() => { onDeleteChat(openMenu); setOpenMenu(null); }}
