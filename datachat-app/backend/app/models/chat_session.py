@@ -52,3 +52,10 @@ class ChatSession(Base):
         default=False,
         nullable=False
     )
+
+    #Allows users to archive chats
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False
+    )

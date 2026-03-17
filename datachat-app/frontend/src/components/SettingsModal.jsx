@@ -1,13 +1,43 @@
 import { useState, useEffect, useRef } from "react";
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react";
-import { ARCHIVED } from "../data/mockData";
+import { getArchivedSessions, restoreSession } from "../api/chatSessions";
 
-export default function SettingsModal({ user, onClose, onLogout }) {
+export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }) {
   const [darkMode, setDarkMode] = useState(true);
-  // track which archived item's menu is open (name acts as key)
+  const [archivedSessions, setArchivedSessions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  // track which archived item's menu is open (id acts as key)
   const [openMenu, setOpenMenu] = useState(null);
   const modalRef = useRef(null);
   const menuRef = useRef(null);
+
+  // Fetch archived sessions when modal opens
+  useEffect(() => {
+    const fetchArchivedSessions = async () => {
+      if (!user?.id) return;
+      try {
+        setLoading(true);
+        const sessions = await getArchivedSessions(user.id);
+        setArchivedSessions(sessions);
+      } catch (error) {
+        console.error("Failed to fetch archived sessions:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchArchivedSessions();
+  }, [user?.id]);
+
+  const handleRestore = async (sessionId) => {
+    try {
+      await onRestoreChat(sessionId);
+      setArchivedSessions(archivedSessions.filter(s => s.id !== sessionId));
+      setOpenMenu(null);
+    } catch (error) {
+      console.error("Failed to restore session:", error);
+    }
+  };
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -133,30 +163,40 @@ export default function SettingsModal({ user, onClose, onLogout }) {
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Archived</h3>
             <div className="border-t border-gray-100" />
             <div className="mt-3 space-y-2">
-              {ARCHIVED.map((item) => (
-                <div key={item.name} className="flex items-center justify-between py-2 relative">
-                  <span className="text-sm text-gray-700">{item.name}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-gray-400">Archive Date: {item.date}</span>
-                    <button
-                      data-menu-button
-                      className="p-1 hover:bg-gray-100 rounded"
-                      onClick={() => setOpenMenu(openMenu === item.name ? null : item.name)}
-                    >
-                      <MoreHorizontal size={14} className="text-gray-400" />
-                    </button>
+              {loading ? (
+                <div className="text-sm text-gray-500">Loading archived sessions...</div>
+              ) : archivedSessions.length === 0 ? (
+                <div className="text-sm text-gray-500">No archived sessions</div>
+              ) : (
+                archivedSessions.map((session) => (
+                  <div key={session.id} className="flex items-center justify-between py-2 relative">
+                    <span className="text-sm text-gray-700 truncate flex-1">{session.chat_title}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-400 whitespace-nowrap ml-2">
+                        {new Date(session.last_message_at).toLocaleDateString()}
+                      </span>
+                      <button
+                        data-menu-button
+                        className="p-1 hover:bg-gray-100 rounded flex-shrink-0"
+                        onClick={() => setOpenMenu(openMenu === session.id ? null : session.id)}
+                      >
+                        <MoreHorizontal size={14} className="text-black" />
+                      </button>
 
-                    {openMenu === item.name && (
-                      <div ref={menuRef} className="absolute right-0 mt-12 w-32 bg-white border border-gray-200 rounded shadow-lg z-20" onClick={(e) => e.stopPropagation()}>
-                        <button className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100" onClick={(e) => e.stopPropagation()}>
-                          Restore
-                        </button>
-                        
-                      </div>
-                    )} 
+                      {openMenu === session.id && (
+                        <div ref={menuRef} className="absolute right-0 mt-12 w-32 bg-white border border-gray-200 rounded shadow-lg z-20" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                            onClick={() => handleRestore(session.id)}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </section>
         </div>

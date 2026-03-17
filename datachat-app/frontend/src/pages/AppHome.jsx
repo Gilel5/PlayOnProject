@@ -8,6 +8,8 @@ import {
   pinSession,
   deleteSession,
   renameSession,
+  archiveSession,
+  restoreSession,
 } from "../api/chatSessions";
 
 import Sidebar from "../components/Sidebar";
@@ -174,6 +176,34 @@ export default function AppHome() {
     }
   }
 
+  async function handleArchiveChat(sessionId) {
+    try {
+      await archiveSession(sessionId);
+      setSessions((prev) => {
+        const next = prev.filter((session) => session.id !== sessionId);
+        if (activeChatId === sessionId) {
+          setActiveChatId(next.length > 0 ? next[0].id : null);
+        }
+        return next;
+      });
+    } catch (error) {
+      console.error("Failed to archive chat", error);
+    }
+  }
+
+  async function handleRestoreChat(sessionId) {
+    try {
+      await restoreSession(sessionId);
+      // Refresh the sessions list to include the restored chat
+      if (user?.id) {
+        const freshSessions = await getUserSessions(user.id);
+        setSessions(freshSessions);
+      }
+    } catch (error) {
+      console.error("Failed to restore chat", error);
+    }
+  }
+
   const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
   const messages = activeChatId ? (messagesMap[activeChatId] || [WELCOME_MESSAGE]) : [WELCOME_MESSAGE];
 
@@ -200,6 +230,7 @@ export default function AppHome() {
           onTogglePin={handleTogglePin}
           onDeleteChat={handleDeleteChat}
           onRenameChat={handleRenameChat}
+          onArchiveChat={handleArchiveChat}
           onClose={() => setSidebarOpen(false)}
           onSettingsOpen={() => setShowSettings(true)}
         />
@@ -226,6 +257,7 @@ export default function AppHome() {
           user={user}
           onClose={() => setShowSettings(false)}
           onLogout={onLogout}
+          onRestoreChat={handleRestoreChat}
         />
       )}
     </div>
