@@ -17,7 +17,7 @@ export default function RightPanel({ onClose }) {
         <div className="flex items-center gap-2">
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white text-gray-900 flex items-center justify-center flex-shrink-0 transition-colors"
+            className="w-8 h-6 rounded-lg bg-white text-gray-900 flex items-center justify-center flex-shrink-0 transition-colors"
           >
             <LayoutTemplate size={16} />
           </button>
