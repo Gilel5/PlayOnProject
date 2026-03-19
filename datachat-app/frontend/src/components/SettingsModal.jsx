@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react";
 import { getArchivedSessions, restoreSession } from "../api/chatSessions";
 
-export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }) {
+export default function SettingsModal({ user, onClose, onLogout, onRestoreChat, changeName, changeEmail }) {
   const [darkMode, setDarkMode] = useState(true);
   const [archivedSessions, setArchivedSessions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -10,6 +10,7 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
   const [openMenu, setOpenMenu] = useState(null);
   const modalRef = useRef(null);
   const menuRef = useRef(null);
+
 
   // Fetch archived sessions when modal opens
   useEffect(() => {
@@ -65,10 +66,10 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-      <div ref={modalRef} className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+    <div ref={modalRef} className={`relative rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto ${darkMode ? "bg-black" : "bg-white"}`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
+        <div className={`flex items-center justify-between px-6 py-5 border-b border-gray-100`}>
+          <h2 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-black"}`}>Settings</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
             <X size={18} className="text-gray-500" />
           </button>
@@ -77,15 +78,20 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
         <div className="px-6 py-4 space-y-6">
           {/* Profile */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Profile</h3>
+            <h3 className={`text-sm font-semibold text-gray-900 mb-3 ${darkMode ? "text-white" : "text-black"}`}>Profile</h3>
             <div className="border-t border-gray-100" />
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 text-gray-600">
                   <User size={16} />
-                  <span className="text-sm">Name</span>
+                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Name</span>
                 </div>
-                <span className="text-sm text-gray-900 font-medium">{user?.email.substring(0, user?.email.indexOf('@')) || "User"}</span>
+                <span className={`text-sm text-gray-900 font-medium ${darkMode ? "text-white" : "text-black"}`}>{user?.email.substring(0, user?.email.indexOf('@')) || "User"}</span>
+                <button 
+                onClick={changeName}
+                className={`px-4 py-1.5 text-xs font-medium rounded-full hover:bg-gray-700 transition-colors ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}>
+                  Change Name
+                </button>
               </div>
               
               <div className="flex items-center justify-between py-2">
@@ -94,45 +100,44 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
                     <rect x="2" y="4" width="20" height="16" rx="2" />
                     <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                   </svg>
-                  <span className="text-sm">Email</span>
+                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Email</span>
                 </div>
-                <span className="text-sm text-gray-900 font-medium">{user?.email || "user@example.com"}</span>
+                <span className={`text-sm text-gray-900 font-medium ${darkMode ? "text-white" : "text-black"}`}>{user?.email || "user@example.com"}</span>
               </div>
             </div>
           </section>
 
           {/* Account */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Account</h3>
+            <h3 className={`text-sm font-semibold text-gray-900 mb-3 ${darkMode ? "text-white" : "text-black"}`}>Account</h3>
             <div className="border-t border-gray-100" />
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 text-gray-600">
                   <Lock size={16} />
-                  <span className="text-sm">Change Password</span>
+                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Change Password</span>
                 </div>
-                <button className="px-4 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-full hover:bg-gray-700 transition-colors">
+                <button className={`px-4 py-1.5 text-xs font-medium rounded-full hover:bg-gray-700 transition-colors ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}>
                   Password Reset
                 </button>
               </div>
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 text-gray-600">
                   <LogOut size={16} />
-                  <span className="text-sm">Sign Out</span>
+                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Sign Out</span>
                 </div>
                 <button
                   onClick={onLogout}
-                  className="px-4 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-full hover:bg-gray-700 transition-colors"
-                >
+                  className={`px-4 py-1.5 bg-gray-900 text-xs font-medium rounded-full hover:bg-gray-700 transition-colors ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}>
                   Sign Out
                 </button>
               </div>
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 text-gray-600">
                   <Trash2 size={16} />
-                  <span className="text-sm">Delete Account</span>
+                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Delete Account</span>
                 </div>
-                <button className="px-4 py-1.5 bg-red-500 text-white text-xs font-medium rounded-full hover:bg-red-600 transition-colors">
+                <button className={`px-4 py-1.5 text-white text-xs font-medium rounded-full hover:bg-red-600 transition-colors ${darkMode ? "bg-red-900" : "bg-red-600"}`}>
                   Delete Account
                 </button>
               </div>
@@ -141,13 +146,13 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
 
           {/* Appearance */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Appearance</h3>
+            <h3 className={`text-sm font-semibold mb-3 ${darkMode ? "text-white" : "text-black"}`}>Appearance</h3>
             <div className="border-t border-gray-100" />
             <div className="mt-3">
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 text-gray-600">
                   <Sun size={16} />
-                  <span className="text-sm">Theme</span>
+                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Theme</span>
                 </div>
                 <button
                   onClick={() => setDarkMode(!darkMode)}
@@ -161,7 +166,7 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
 
           {/* Archived */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Archived</h3>
+            <h3 className={`text-sm font-semibold text-gray-900 mb-3 ${darkMode ? "text-white" : "text-black"}`}>Archived</h3>
             <div className="border-t border-gray-100" />
             <div className="mt-3 space-y-2">
               {loading ? (
@@ -171,14 +176,14 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
               ) : (
                 archivedSessions.map((session) => (
                   <div key={session.id} className="flex items-center justify-between py-2 relative">
-                    <span className="text-sm text-gray-700 truncate flex-1">{session.chat_title}</span>
+                    <span className={`text-sm text-gray-700 truncate flex-1 ${darkMode ? "text-white" : "text-black"}`}>{session.chat_title}</span>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-gray-400 whitespace-nowrap ml-2">
                         {new Date(session.last_message_at).toLocaleDateString()}
                       </span>
                       <button
                         data-menu-button
-                        className="p-1 hover:bg-gray-100 rounded flex-shrink-0"
+                        className={`p-1 hover:bg-gray-100 rounded flex-shrink-0 ${darkMode ? "bg-gray-200" : "bg-white"}`}
                         onClick={() => setOpenMenu(openMenu === session.id ? null : session.id)}
                       >
                         <MoreHorizontal size={14} className="text-black" />
