@@ -85,8 +85,9 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat }
                   <User size={16} />
                   <span className="text-sm">Name</span>
                 </div>
-                <span className="text-sm text-gray-900 font-medium">{user?.name || "User"}</span>
+                <span className="text-sm text-gray-900 font-medium">{user?.email.substring(0, user?.email.indexOf('@')) || "User"}</span>
               </div>
+              
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 text-gray-600">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
