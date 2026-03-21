@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useContext } from "react";
+import { DarkModeContext } from "./DarkModeContext";
 import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp } from "lucide-react";
 import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
@@ -26,6 +27,7 @@ export default function ChatArea({
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
+  // const {darkMode} = useContext(DarkModeContext)
 
 
   function handleKeyDown(e) {
@@ -74,7 +76,7 @@ export default function ChatArea({
   return (
     <div className="flex-1 flex flex-col min-w-0">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100 bg-white">
+      <div className={`flex items-center justify-between px-4 py-4 border-b border-gray-100`}>
         <div className="flex items-center gap-2">
           {!sidebarOpen && (
             <>

@@ -1,9 +1,20 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
+import { DarkModeContext } from "./DarkModeContext"
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react";
 import { getArchivedSessions, restoreSession } from "../api/chatSessions";
 
 export default function SettingsModal({ user, onClose, onLogout, onRestoreChat, changeName, changeEmail }) {
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    // Load saved value from localStorage if it exists
+    const saved = localStorage.getItem("darkMode");
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    // Save whenever it changes
+    localStorage.setItem("darkMode", JSON.stringify(darkMode));
+  }, [darkMode]);
+  
   const [archivedSessions, setArchivedSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   // track which archived item's menu is open (id acts as key)
