@@ -3,7 +3,7 @@ import { DarkModeContext } from "./DarkModeContext"
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react";
 import { getArchivedSessions, restoreSession } from "../api/chatSessions";
 
-export default function SettingsModal({ user, onClose, onLogout, onRestoreChat, changeName, changeEmail }) {
+export default function SettingsModal({ user, onClose, onLogout, onDelete, onRestoreChat, changeName, changeEmail }) {
   const [darkMode, setDarkMode] = useState(() => {
     // Load saved value from localStorage if it exists
     const saved = localStorage.getItem("darkMode");
@@ -148,7 +148,13 @@ export default function SettingsModal({ user, onClose, onLogout, onRestoreChat, 
                   <Trash2 size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Delete Account</span>
                 </div>
-                <button className={`px-4 py-1.5 text-white text-xs font-medium rounded-full hover:bg-red-600 transition-colors ${darkMode ? "bg-red-900" : "bg-red-600"}`}>
+                <button
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
+                      onDelete();
+                    }
+                  }}
+                  className={`px-4 py-1.5 text-white text-xs font-medium rounded-full hover:bg-red-600 transition-colors ${darkMode ? "bg-red-900" : "bg-red-600"}`}>
                   Delete Account
                 </button>
               </div>
