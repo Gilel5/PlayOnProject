@@ -1,5 +1,8 @@
 import asyncio
 import io
+import logging
+import re
+
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
@@ -11,6 +14,7 @@ from app.db.finance_session import finance_engine
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 bearer = HTTPBearer()
+logger = logging.getLogger(__name__)
 
 # How many rows are sent to Supabase in a single INSERT statement.
 # Larger chunks = fewer round trips = faster uploads.
@@ -72,6 +76,25 @@ def _normalize_col(c: str) -> str:
         .replace("-", "_")
     )
 
+def _friendly_error(e: Exception) -> str:
+    msg = str(e)
+
+    #Not Null Violation
+    match = re.search(r'null value in column "(.+?)"', msg)
+    if match:
+        return f"Please check the '{match.group(1)}' column - it contains empty values that are required."
+
+    #Type mismatch
+    match = re.search(r'column "(.+?)" is of type (.+?) but expression is of type (.+?)[\n\.]', msg)
+    if match:
+        return f"Please check the '{match.group(1)}' column — expected {match.group(2)} but received {match.group(3)}."
+    
+    # Invalid input syntax
+    match = re.search(r'invalid input syntax for type (.+?): "(.+?)"', msg)
+    if match:
+        return f"Please check your data — value '{match.group(2)}' is not valid for a {match.group(1)} column."
+
+    return "Upload failed due to a database error. Please verify your data and try again."
 
 @router.post("/csv")
 async def upload_csv(
@@ -172,7 +195,8 @@ async def upload_csv(
         except Exception as e:
             # Roll back any uncommitted rows from the current chunk on failure.
             raw_conn.rollback()
-            raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+            logger.error("CSV Upload error: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail=_friendly_error(e))
         finally:
             # Always return the connection to the pool, even if an error occurred.
             raw_conn.close()
