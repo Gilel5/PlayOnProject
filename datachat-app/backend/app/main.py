@@ -8,7 +8,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.api.routes.upload import router as upload_router
 from app.db.session import engine
 from app.db.base import Base
 from app.api.routes.auth import router as auth_router
@@ -40,6 +40,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(chat_sessions_router)
+app.include_router(upload_router)
 
 @app.get("/health")
 def health():
