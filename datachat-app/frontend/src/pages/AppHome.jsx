@@ -65,6 +65,10 @@ export default function AppHome() {
     }
   }
 
+  async function OnDelete() {
+    
+  }
+
   function removeFile(label) {
     setFiles((prev) => prev.filter((t) => t !== label));
   }
