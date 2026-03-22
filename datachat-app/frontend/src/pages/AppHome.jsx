@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { me, refresh, logout as logoutApi } from "../api/auth";
 import { sendChatMessage } from "../api/chat";
@@ -16,6 +16,7 @@ import Sidebar from "../components/Sidebar";
 import ChatArea from "../components/ChatArea";
 import RightPanel from "../components/RightPanel";
 import SettingsModal from "../components/SettingsModal";
+import { uploadCsv } from "../api/upload";
 
 
 export default function AppHome() {
@@ -32,6 +33,8 @@ export default function AppHome() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const abortControllerRef = useRef(null);
 
   async function getAccessToken() {
     const existing = sessionStorage.getItem("access_token");
@@ -118,6 +121,28 @@ export default function AppHome() {
     } catch (error) {
       console.error("Failed to create chat", error);
     }
+  }
+
+  async function handleUploadCsv(file) {
+    abortControllerRef.current = new AbortController();
+    setUploadStatus("uploading");
+    try {
+      const result = await uploadCsv(file, () => {}, abortControllerRef.current.signal);
+      setUploadStatus(result);
+      setTimeout(() => setUploadStatus(null), 6000);
+    } catch (err) {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
+        setUploadStatus({ error: "Upload cancelled." });
+      } else {
+        const detail = err.response?.data?.detail ?? "Upload failed. Please try again.";
+        setUploadStatus({ error: detail });
+      }
+      setTimeout(() => setUploadStatus(null), 8000);
+    }
+  }
+
+  function handleCancelUpload() {
+    abortControllerRef.current?.abort();
   }
 
   async function handleTogglePin(sessionId) {
@@ -248,9 +273,13 @@ export default function AppHome() {
         onSidebarOpen={() => setSidebarOpen(true)}
         rightPanelOpen={rightPanelOpen}
         onRightPanelToggle={() => setRightPanelOpen((prev) => !prev)}
+        onUploadCsv={handleUploadCsv}
+        uploadStatus={uploadStatus}
+        onCancelUpload={handleCancelUpload}
       />
 
       {rightPanelOpen && <RightPanel onClose={() => setRightPanelOpen(false)} />}
+
 
       {showSettings && (
         <SettingsModal

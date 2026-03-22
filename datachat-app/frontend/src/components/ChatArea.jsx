@@ -17,15 +17,20 @@ export default function ChatArea({
   onSidebarOpen,
   rightPanelOpen,
   onRightPanelToggle,
+  onUploadCsv,
+  uploadStatus, // null | 'uploading' | {rows_inserted, table} | {error}
+  onCancelUpload,
 }) {
   const messagesEndRef = useRef(null);
   const renameInputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Menu state
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
+
 
 
   function handleKeyDown(e) {
@@ -69,6 +74,17 @@ export default function ChatArea({
     const rect = e.currentTarget.getBoundingClientRect();
     setMenuPosition({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     setOpenMenu(chatId);
+  }
+
+  function handlePaperclipClick() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    onUploadCsv(file);
   }
 
   return (
@@ -144,6 +160,28 @@ export default function ChatArea({
 
       {/* Input area */}
       <div className="px-6 pb-6 pt-2">
+        {/* Upload status banners */}
+        {uploadStatus === "uploading" && (
+          <div className="flex items-center gap-2 mb-2 px-1 text-xs text-gray-500">
+            <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
+            <span>Uploading CSV…</span>
+            <button
+              onClick={onCancelUpload}
+              className="ml-1 text-red-400 hover:text-red-600 underline"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+        {uploadStatus?.rows_inserted != null && (
+          <div className="mb-2 px-1 text-xs text-green-600">
+            ✓ {uploadStatus.rows_inserted.toLocaleString()} rows added to <strong>{uploadStatus.table}</strong>
+          </div>
+        )}
+        {uploadStatus?.error && (
+          <div className="mb-2 px-1 text-xs text-red-500">{uploadStatus.error}</div>
+        )}
+
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2 px-1">
             {files.map((file) => (
@@ -161,7 +199,19 @@ export default function ChatArea({
             className="w-full px-4 pt-3 pb-1 text-sm text-gray-700 placeholder-gray-400 outline-none resize-none bg-transparent"
           />
           <div className="flex items-center justify-between px-3 pb-3">
-            <button className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600">
+            {/* Hidden CSV file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <button
+              onClick={handlePaperclipClick}
+              disabled={uploadStatus === "uploading"}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 disabled:opacity-40"
+            >
               <Paperclip size={16} />
             </button>
             <button

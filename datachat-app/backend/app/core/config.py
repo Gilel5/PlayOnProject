@@ -28,6 +28,10 @@ class Settings(BaseSettings):
         # OpenAI api key
         OPENAI_API_KEY: str
 
+        # Finance database (separate Supabase project)
+        FINANCE_DATABASE_URL: str
+        FINANCE_TABLE_NAME: str
+
         class Config:
                 # Load settings from .env files
                 env_file = ".env"
