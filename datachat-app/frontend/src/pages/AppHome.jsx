@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { DarkModeContext } from "../components/DarkModeContext";
 import { me, refresh, logout as logoutApi } from "../api/auth";
 import { sendChatMessage } from "../api/chat";
 import {
@@ -236,19 +237,22 @@ export default function AppHome() {
   const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
   const messages = activeChatId ? (messagesMap[activeChatId] || [WELCOME_MESSAGE]) : [WELCOME_MESSAGE];
 
+  const { darkMode } = useContext(DarkModeContext);
+
   if (!user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
+      <div className={`flex h-screen items-center justify-center ${darkMode ? "bg-slate-950" : "bg-gray-50"}`}>
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-gray-500">Loading...</p>
+          <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-500"}`}>Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+    <div className={`flex h-screen ${darkMode ? "bg-black text-white" : "bg-gray-50 text-gray-900"} font-sans overflow-hidden`}>
+
       {sidebarOpen && (
         <Sidebar
           user={user}

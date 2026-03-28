@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { DarkModeProvider } from "./components/DarkModeContext";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import AppHome from "./pages/AppHome";
@@ -6,8 +7,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <DarkModeProvider>
+      <BrowserRouter>
+        <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         <Route path="/login" element={<Login/>}/>
@@ -25,6 +27,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/login" replace/>}/>
       </Routes>
     </BrowserRouter>
+  </DarkModeProvider>
   );
 }
 

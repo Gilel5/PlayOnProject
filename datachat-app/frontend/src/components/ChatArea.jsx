@@ -30,6 +30,7 @@ export default function ChatArea({
   const [openMenu, setOpenMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const [renamingId, setRenamingId] = useState(null);
+  const { darkMode } = useContext(DarkModeContext);
   const [renameValue, setRenameValue] = useState("");
   // const {darkMode} = useContext(DarkModeContext)
 
@@ -90,17 +91,17 @@ export default function ChatArea({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0">
+    <div className={`flex-1 flex flex-col min-w-0 ${darkMode ? "bg-black text-white" : "bg-white text-gray-900"}`}>
       {/* Top bar */}
-      <div className={`flex items-center justify-between px-4 py-4 border-b border-gray-100`}>
+      <div className={`flex items-center justify-between px-4 py-4 border-b ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
         <div className="flex items-center gap-2">
           {!sidebarOpen && (
             <>
               <button
                 onClick={onSidebarOpen}
-                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
               >
-                <Menu size={18} className="text-gray-600" />
+                <Menu size={18} className={darkMode ? "text-slate-200" : "text-gray-600"} />
               </button>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-[#5BC5D0] text-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -114,7 +115,7 @@ export default function ChatArea({
                     />
                   </svg>
                 </div>
-                <span className="font-semibold text-gray-900 text-sm">DataChat</span>
+                <span className={darkMode ? "font-semibold text-white text-sm" : "font-semibold text-gray-900 text-sm"}>DataChat</span>
               </div>
             </>
           )}
@@ -124,14 +125,14 @@ export default function ChatArea({
           <button className="p-1.5 rounded-lg transition-colors"
             onClick={(e) => handleMenuOpen(e, "current-chat")}
           >
-            <MoreHorizontal size={18} className="text-black" />
+            <MoreHorizontal size={18} className={darkMode ? "text-slate-200" : "text-black"} />
           </button>
           {!rightPanelOpen && (
             <button
               onClick={onRightPanelToggle}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+              className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
             >
-              <LayoutTemplate size={18} />
+              <LayoutTemplate size={18} className={darkMode ? "text-slate-200" : "text-gray-600"} />
             </button>
           )}
         </div>
@@ -164,7 +165,7 @@ export default function ChatArea({
       <div className="px-6 pb-6 pt-2">
         {/* Upload status banners */}
         {uploadStatus === "uploading" && (
-          <div className="flex items-center gap-2 mb-2 px-1 text-xs text-gray-500">
+          <div className={`flex items-center gap-2 mb-2 px-1 text-xs ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
             <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
             <span>Uploading CSV…</span>
             <button
@@ -191,14 +192,14 @@ export default function ChatArea({
             ))}
           </div>
         )}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className={`rounded-2xl shadow-sm overflow-hidden ${darkMode ? "bg-black border border-slate-800" : "bg-white border border-gray-200"}`}>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="What would you like to know?"
             rows={2}
-            className="w-full px-4 pt-3 pb-1 text-sm text-gray-700 placeholder-gray-400 outline-none resize-none bg-transparent"
+            className={`w-full px-4 pt-3 pb-1 text-sm outline-none resize-none bg-transparent ${darkMode ? "text-gray-100 placeholder-slate-400" : "text-gray-700 placeholder-gray-400"}`}
           />
           <div className="flex items-center justify-between px-3 pb-3">
             {/* Hidden CSV file input */}
@@ -212,7 +213,7 @@ export default function ChatArea({
             <button
               onClick={handlePaperclipClick}
               disabled={uploadStatus === "uploading"}
-              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 disabled:opacity-40"
+              className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${darkMode ? "hover:bg-slate-800 text-slate-300 hover:text-slate-100" : "hover:bg-gray-100 text-gray-400 hover:text-gray-600"}`}
             >
               <Paperclip size={16} />
             </button>
@@ -221,8 +222,12 @@ export default function ChatArea({
               disabled={!input.trim() || isLoading}
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                 input.trim() && !isLoading
-                  ? "bg-gray-800 text-white hover:bg-gray-900"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  ? darkMode
+                    ? "bg-sky-400 text-slate-900 hover:bg-sky-500"
+                    : "bg-gray-800 text-white hover:bg-gray-900"
+                  : darkMode
+                    ? "bg-slate-700 text-slate-400 cursor-not-allowed"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
               <ArrowUp size={14} />
@@ -235,11 +240,11 @@ export default function ChatArea({
       {openMenu && (
         <div
           style={{ position: "fixed", top: menuPosition.top, right: menuPosition.right }}
-          className="w-36 bg-white border border-gray-200 rounded shadow-lg z-50"
+          className={`w-36 rounded shadow-lg z-50 ${darkMode ? "bg-slate-900 border border-slate-700" : "bg-white border border-gray-200"}`}
         >
           <button
             onClick={() => { /* TODO: Implement clear chat */ setOpenMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
           >
             Clear Chat
           </button>
