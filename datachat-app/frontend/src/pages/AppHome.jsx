@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { me, refresh, logout as logoutApi } from "../api/auth";
-import { sendChatMessage } from "../api/chat";
+import { sendChatMessage, generateSummaryReports } from "../api/chat";
 import {
   createChatSession,
   getUserSessions,
@@ -34,6 +34,7 @@ export default function AppHome() {
   const [sessions, setSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [isGeneratingReports, setIsGeneratingReports] = useState(false);
   const abortControllerRef = useRef(null);
 
   async function getAccessToken() {
@@ -147,6 +148,47 @@ export default function AppHome() {
 
   function handleCancelUpload() {
     abortControllerRef.current?.abort();
+  }
+
+  async function handleGenerateReports() {
+    if (!activeChatId) return;
+    setIsGeneratingReports(true);
+
+    // Add a loading message
+    const loadingMsg = { id: Date.now(), role: "bot", text: "Generating summary reports… This may take a moment." };
+    setMessagesMap((prev) => ({
+      ...prev,
+      [activeChatId]: [...(prev[activeChatId] || [WELCOME_MESSAGE]), loadingMsg],
+    }));
+
+    try {
+      const blobUrl = await generateSummaryReports(); // returns blob URL
+      // file download card
+      const doneMsg = {
+        id: Date.now() + 1,
+        role: "bot",
+        text: "Your summary reports are ready:",
+        reportFile: { url: blobUrl, name: "summary_reports.xlsx" },
+      };
+      setMessagesMap((prev) => {
+        const current = prev[activeChatId] || [];
+        return {
+          ...prev,
+          [activeChatId]: [...current.filter((m) => m.id !== loadingMsg.id), doneMsg],
+        };
+      });
+    } catch {
+      const errorMsg = { id: Date.now() + 1, role: "bot", text: "Sorry, I couldn't generate the reports. Please try again." };
+      setMessagesMap((prev) => {
+        const current = prev[activeChatId] || [];
+        return {
+          ...prev,
+          [activeChatId]: [...current.filter((m) => m.id !== loadingMsg.id), errorMsg],
+        };
+      });
+    } finally {
+      setIsGeneratingReports(false);
+    }
   }
 
   async function handleTogglePin(sessionId) {
@@ -280,6 +322,8 @@ export default function AppHome() {
         onUploadCsv={handleUploadCsv}
         uploadStatus={uploadStatus}
         onCancelUpload={handleCancelUpload}
+        onGenerateReports={handleGenerateReports}
+        isGeneratingReports={isGeneratingReports}
       />
 
       {rightPanelOpen && <RightPanel onClose={() => setRightPanelOpen(false)} />}

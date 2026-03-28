@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useContext } from "react";
 import { DarkModeContext } from "./DarkModeContext";
-import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp } from "lucide-react";
+import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp, BarChart3 } from "lucide-react";
+import SummaryReport from "./SummaryReport";
 import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
 import PdfAttachment from "./PdfAttachment";
@@ -21,6 +22,8 @@ export default function ChatArea({
   onUploadCsv,
   uploadStatus, // null | 'uploading' | {rows_inserted, table} | {error}
   onCancelUpload,
+  onGenerateReports,
+  isGeneratingReports,
 }) {
   const messagesEndRef = useRef(null);
   const renameInputRef = useRef(null);
@@ -142,9 +145,40 @@ export default function ChatArea({
         {messages.map((msg) =>
           msg.role === "user" ? (
             <UserMessage key={msg.id} text={msg.text} />
+          ) : msg.summaryData ? (
+            <BotMessage key={msg.id} wide>
+              <SummaryReport data={msg.summaryData} />
+            </BotMessage>
           ) : (
             <BotMessage key={msg.id}>
-              <p className="mb-2">{msg.text}</p>
+              <p className="mb-2 whitespace-pre-wrap">{msg.text}</p>
+              {msg.reportFile && (
+                <a
+                  href={msg.reportFile.url}
+                  download={msg.reportFile.name}
+                  className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl p-3 mt-2 hover:bg-gray-100 hover:border-gray-300 transition-colors group cursor-pointer max-w-xs"
+                >
+                  <div className="w-9 h-9 rounded-lg bg-green-100 text-green-700 flex items-center justify-center flex-shrink-0">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="8" y1="13" x2="16" y2="13" />
+                      <line x1="8" y1="17" x2="16" y2="17" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{msg.reportFile.name}</p>
+                    <p className="text-xs text-gray-500">Excel Workbook • 3 sheets</p>
+                  </div>
+                  <div className="flex-shrink-0 text-gray-400 group-hover:text-gray-600 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  </div>
+                </a>
+              )}
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
           )
@@ -209,13 +243,23 @@ export default function ChatArea({
               className="hidden"
               onChange={handleFileChange}
             />
-            <button
-              onClick={handlePaperclipClick}
-              disabled={uploadStatus === "uploading"}
-              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 disabled:opacity-40"
-            >
-              <Paperclip size={16} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handlePaperclipClick}
+                disabled={uploadStatus === "uploading"}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 disabled:opacity-40"
+              >
+                <Paperclip size={16} />
+              </button>
+              <button
+                onClick={onGenerateReports}
+                disabled={isGeneratingReports}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 disabled:opacity-40"
+                title="Generate Summary Reports"
+              >
+                <BarChart3 size={16} />
+              </button>
+            </div>
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || isLoading}
