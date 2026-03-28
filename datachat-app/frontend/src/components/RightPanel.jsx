@@ -1,4 +1,6 @@
+import { useContext } from "react";
 import { LayoutTemplate, ExternalLink } from "lucide-react";
+import { DarkModeContext } from "./DarkModeContext";
 
 {/* Eventually we will have to redevlop this with the real chat output in mind */}
 
@@ -11,27 +13,28 @@ const LEGEND = [
 const BAR_HEIGHTS = [65, 90, 75, 100, 95, 80, 110, 88, 92, 85, 105, 78];
 
 export default function RightPanel({ onClose }) {
+  const { darkMode } = useContext(DarkModeContext);
   return (
-    <aside className="w-96 flex-shrink-0 border-l border-gray-100 bg-white flex flex-col h-full overflow-y-auto">
-      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+    <aside className={`w-96 flex-shrink-0 flex flex-col h-full overflow-y-auto border-l ${darkMode ? "bg-black border-slate-800 text-white" : "bg-white border-gray-100 text-gray-900"}`}>
+      <div className={`flex items-center justify-between px-4 py-4 border-b ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
         <div className="flex items-center gap-2">
           <button
             onClick={onClose}
-            className="w-8 h-6 rounded-lg bg-white text-gray-900 flex items-center justify-center flex-shrink-0 transition-colors"
+            className={`w-8 h-6 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${darkMode ? "bg-slate-800 text-slate-100" : "bg-white text-gray-900"}`}
           >
             <LayoutTemplate size={16} />
           </button>
-          <span className="font-semibold text-gray-900 text-sm">Analytics</span>
+          <span className={`font-semibold text-sm ${darkMode ? "text-white" : "text-gray-900"}`}>Analytics</span>
         </div>
-        <button className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-          <ExternalLink size={18} className="text-black" />
+        <button className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}>
+          <ExternalLink size={18} className={darkMode ? "text-slate-100" : "text-black"} />
         </button>
       </div>
 
       <div className="p-4 space-y-4">
         {/* Donut chart card */}
-        <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-          <h4 className="text-sm font-medium text-gray-800 mb-3">
+        <div className={`rounded-xl p-4 ${darkMode ? "bg-slate-800 border border-slate-700" : "bg-gray-50 border border-gray-100"}`}>
+          <h4 className={`text-sm font-medium mb-3 ${darkMode ? "text-white" : "text-gray-800"}`}>
             Change in Subscriptions from Jan 2025 to Jan 2026
           </h4>
           <div className="flex justify-center gap-6 py-4">
@@ -60,8 +63,8 @@ export default function RightPanel({ onClose }) {
         </div>
 
         {/* Bar chart card */}
-        <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-          <h4 className="text-sm font-medium text-gray-800 mb-3">
+        <div className={`rounded-xl p-4 ${darkMode ? "bg-slate-800 border border-slate-700" : "bg-gray-50 border border-gray-100"}`}>
+          <h4 className={`text-sm font-medium mb-3 ${darkMode ? "text-white" : "text-gray-800"}`}>
             Subscriptions per day in the month of January
           </h4>
           <div className="flex items-end gap-1 h-24">
