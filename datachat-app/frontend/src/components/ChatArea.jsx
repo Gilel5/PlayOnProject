@@ -31,7 +31,7 @@ export default function ChatArea({
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
-  const { darkMode } = useContext(DarkModeContext);
+  // const {darkMode} = useContext(DarkModeContext)
 
 
 
@@ -92,15 +92,15 @@ export default function ChatArea({
   return (
     <div className="flex-1 flex flex-col min-w-0">
       {/* Top bar */}
-      <div className={`flex items-center justify-between px-4 py-4 border-b ${darkMode ? "border-gray-700" : "border-gray-100"}`}>
+      <div className={`flex items-center justify-between px-4 py-4 border-b border-gray-100`}>
         <div className="flex items-center gap-2">
           {!sidebarOpen && (
             <>
               <button
                 onClick={onSidebarOpen}
-                className={`p-1.5 rounded-lg hover:bg-gray-100 transition-colors ${darkMode ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <Menu size={18} className={darkMode ? "text-gray-300" : "text-gray-600"} />
+                <Menu size={18} className="text-gray-600" />
               </button>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-[#5BC5D0] text-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -114,22 +114,22 @@ export default function ChatArea({
                     />
                   </svg>
                 </div>
-                <span className={`font-semibold text-sm ${darkMode ? "text-white" : "text-gray-900"}`}>DataChat</span>
+                <span className="font-semibold text-gray-900 text-sm">DataChat</span>
               </div>
             </>
           )}
         </div>
         {/*  Right side of top bar */}
         <div className="flex items-center gap-2">
-          <button className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}
+          <button className="p-1.5 rounded-lg transition-colors"
             onClick={(e) => handleMenuOpen(e, "current-chat")}
           >
-            <MoreHorizontal size={18} className={darkMode ? "text-gray-400" : "text-black"} />
+            <MoreHorizontal size={18} className="text-black" />
           </button>
           {!rightPanelOpen && (
             <button
               onClick={onRightPanelToggle}
-              className={`p-1.5 rounded-lg text-gray-500 transition-colors ${darkMode ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
             >
               <LayoutTemplate size={18} />
             </button>
@@ -138,7 +138,7 @@ export default function ChatArea({
       </div>
 
       {/* Messages */}
-      <div className={`flex-1 overflow-y-auto px-8 py-6 space-y-5 ${darkMode ? "bg-black" : "bg-white"}`}>
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-5">
         {messages.map((msg) =>
           msg.role === "user" ? (
             <UserMessage key={msg.id} text={msg.text} />
@@ -162,6 +162,7 @@ export default function ChatArea({
 
       {/* Input area */}
       <div className="px-6 pb-6 pt-2">
+        {/* Upload status banners */}
         {uploadStatus === "uploading" && (
           <div className="flex items-center gap-2 mb-2 px-1 text-xs text-gray-500">
             <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
@@ -175,12 +176,12 @@ export default function ChatArea({
           </div>
         )}
         {uploadStatus?.rows_inserted != null && (
-          <div className={`mb-2 px-1 text-xs ${darkMode ? "text-green-400" : "text-green-600"}`}>
+          <div className="mb-2 px-1 text-xs text-green-600">
             ✓ {uploadStatus.rows_inserted.toLocaleString()} rows added to <strong>{uploadStatus.table}</strong>
           </div>
         )}
         {uploadStatus?.error && (
-          <div className={`mb-2 px-1 text-xs ${darkMode ? "text-red-400" : "text-red-500"}`}>{uploadStatus.error}</div>
+          <div className="mb-2 px-1 text-xs text-red-500">{uploadStatus.error}</div>
         )}
 
         {files.length > 0 && (
@@ -190,14 +191,14 @@ export default function ChatArea({
             ))}
           </div>
         )}
-        <div className={`border rounded-2xl shadow-sm overflow-hidden ${darkMode ? "bg-black border-gray-600" : "bg-white border-gray-200"}`}>
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="What would you like to know?"
             rows={2}
-            className={`w-full px-4 pt-3 pb-1 text-sm placeholder-gray-400 outline-none resize-none bg-transparent ${darkMode ? "text-gray-200" : "text-gray-700"}`}
+            className="w-full px-4 pt-3 pb-1 text-sm text-gray-700 placeholder-gray-400 outline-none resize-none bg-transparent"
           />
           <div className="flex items-center justify-between px-3 pb-3">
             {/* Hidden CSV file input */}
@@ -211,7 +212,7 @@ export default function ChatArea({
             <button
               onClick={handlePaperclipClick}
               disabled={uploadStatus === "uploading"}
-              className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${darkMode ? "hover:bg-gray-700 text-gray-400 hover:text-gray-200" : "hover:bg-gray-100 text-gray-400 hover:text-gray-600"}`}
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600 disabled:opacity-40"
             >
               <Paperclip size={16} />
             </button>
@@ -220,8 +221,8 @@ export default function ChatArea({
               disabled={!input.trim() || isLoading}
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                 input.trim() && !isLoading
-                  ? (darkMode ? "bg-gray-600 text-white hover:bg-gray-500" : "bg-gray-800 text-white hover:bg-gray-900")
-                  : (darkMode ? "bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-gray-200 text-gray-400 cursor-not-allowed")
+                  ? "bg-gray-800 text-white hover:bg-gray-900"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
             >
               <ArrowUp size={14} />
@@ -234,17 +235,17 @@ export default function ChatArea({
       {openMenu && (
         <div
           style={{ position: "fixed", top: menuPosition.top, right: menuPosition.right }}
-          className={`w-36 border rounded shadow-lg z-50 ${darkMode ? "bg-black border-gray-600" : "bg-white border-gray-200"}`}
+          className="w-36 bg-white border border-gray-200 rounded shadow-lg z-50"
         >
           <button
             onClick={() => { /* TODO: Implement clear chat */ setOpenMenu(null); }}
-            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-gray-700 text-white" : "hover:bg-gray-100"}`}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
           >
             Clear Chat
           </button>
           <button
             onClick={() => { /* TODO: Implement export chat */ setOpenMenu(null); }}
-            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-gray-700 text-white" : "hover:bg-gray-100"}`}
+            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
           >
             Export Chat
           </button>
