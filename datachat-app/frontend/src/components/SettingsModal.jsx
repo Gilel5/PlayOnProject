@@ -4,7 +4,16 @@ import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react
 import { getArchivedSessions, restoreSession } from "../api/chatSessions";
 
 export default function SettingsModal({ user, onClose, onLogout, onDelete, onRestoreChat, changeName, changeEmail }) {
-  const { darkMode, toggleDarkMode } = useContext(DarkModeContext);
+  const [darkMode, setDarkMode] = useState(() => {
+    // Load saved value from localStorage if it exists
+    const saved = localStorage.getItem("darkMode");
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    // Save whenever it changes
+    localStorage.setItem("darkMode", JSON.stringify(darkMode));
+  }, [darkMode]);
   
   const [archivedSessions, setArchivedSessions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -163,7 +172,7 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Theme</span>
                 </div>
                 <button
-                  onClick={toggleDarkMode}
+                  onClick={() => setDarkMode(!darkMode)}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${darkMode ? "bg-gray-900" : "bg-gray-300"}`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${darkMode ? "translate-x-6" : "translate-x-1"}`} />
