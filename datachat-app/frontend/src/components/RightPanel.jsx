@@ -45,7 +45,7 @@ export default function RightPanel({ onClose }) {
               <circle cx="40" cy="40" r="28" fill="none" stroke="#a855f7" strokeWidth="14" strokeDasharray="35 175" strokeDashoffset="-115" />
               <circle cx="40" cy="40" r="28" fill="none" stroke="#f97316" strokeWidth="14" strokeDasharray="25 175" strokeDashoffset="-150" />
             </svg>
-          </div>
+            </div>
           <div className="space-y-1.5 mt-2">
             {LEGEND.map((item) => (
               <div key={item.label} className="flex items-center justify-between">
@@ -57,7 +57,7 @@ export default function RightPanel({ onClose }) {
               </div>
             ))}
           </div>
-        </div>
+            </div>
 
         {/* Bar chart card */}
         <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
