@@ -17,10 +17,13 @@ import ChatArea from "../components/ChatArea";
 import RightPanel from "../components/RightPanel";
 import SettingsModal from "../components/SettingsModal";
 import { uploadCsv } from "../api/upload";
+import { useContext } from "react";
+import { DarkModeContext } from "../components/DarkModeContext";
 
 
 export default function AppHome() {
   const nav = useNavigate();
+  const { darkMode } = useContext(DarkModeContext);
 
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -238,17 +241,17 @@ export default function AppHome() {
 
   if (!user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
+      <div className={`flex h-screen items-center justify-center font-sans overflow-hidden ${darkMode ? "bg-black" : "bg-gray-50"}`}>
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-gray-500">Loading...</p>
+          <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-500"}`}>Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans overflow-hidden">
+    <div className={`flex h-screen font-sans overflow-hidden ${darkMode ? "bg-black" : "bg-gray-50"}`}>
       {sidebarOpen && (
         <Sidebar
           user={user}

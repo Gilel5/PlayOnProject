@@ -1,4 +1,8 @@
+import { useContext } from "react";
+import { DarkModeContext } from "../DarkModeContext";
+
 export default function BotMessage({ children }) {
+  const { darkMode } = useContext(DarkModeContext);
   return (
     <div className="flex items-start gap-3">
       <div className="w-8 h-8 rounded-full bg-[#5BC5D0] flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -12,7 +16,7 @@ export default function BotMessage({ children }) {
           />
         </svg>
       </div>
-      <div className="max-w-lg text-sm text-gray-800 mt-1.5">{children}</div>
+      <div className={`max-w-lg text-sm mt-1.5 ${darkMode ? "text-white" : "text-gray-800"}`}>{children}</div>
     </div>
   );
 }
