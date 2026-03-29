@@ -18,6 +18,7 @@ export default function Sidebar({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [openMenu, setOpenMenu] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const { darkMode } = useContext(DarkModeContext);
   // Position of the dropdown menu (fixed to avoid being clipped by overflow container)
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
@@ -252,11 +253,37 @@ export default function Sidebar({
             Archive Chat
           </button>
           <button
-            onClick={() => { onDeleteChat(openMenu); setOpenMenu(null); }}
+            onClick={() => { setDeleteConfirmId(openMenu); setOpenMenu(null); }}
             className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
           >
             Delete Chat
           </button>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className={`rounded-xl shadow-lg p-5 w-72 ${darkMode ? "bg-slate-800 text-white" : "bg-white text-gray-900"}`}>
+            <p className="text-sm font-medium mb-1">Delete Chat</p>
+            <p className={`text-sm mb-4 ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
+              Are you sure you want to delete this chat? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className={`px-3 py-1.5 text-sm rounded-lg ${darkMode ? "hover:bg-slate-700 text-slate-200" : "hover:bg-gray-100 text-gray-600"}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { onDeleteChat(deleteConfirmId); setDeleteConfirmId(null); }}
+                className="px-3 py-1.5 text-sm rounded-lg bg-red-500 text-white hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
