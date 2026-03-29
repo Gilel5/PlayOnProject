@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import re
 
 from openai import OpenAI
@@ -68,6 +69,10 @@ Rules:
 - pass_name has values: Month, Annual, Media, Season, and others.
 - Use EXTRACT or DATE_TRUNC for date-based grouping.
 - Never use DELETE, UPDATE, INSERT, DROP, ALTER, TRUNCATE, or CREATE.
+- Numeric columns (base_amount, retail_amount) may contain NaN values. When
+  aggregating (SUM, AVG, etc.), exclude NaN rows by adding a WHERE or CASE
+  filter, e.g.: SUM(CASE WHEN base_amount = base_amount THEN base_amount ELSE 0 END)
+  (NaN != NaN in IEEE 754, so base_amount = base_amount is false for NaN rows).
 """
 
 _ANSWER_SYSTEM_PROMPT = """\
@@ -120,7 +125,11 @@ def get_data_chat_response(message: str) -> str:
     with finance_engine.connect() as conn:
         result = conn.execute(text(sql))
         columns = list(result.keys())
-        rows = [dict(zip(columns, row)) for row in result.fetchall()]
+        rows = [
+            {k: (0 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v)
+             for k, v in zip(columns, row)}
+            for row in result.fetchall()
+        ]
 
     # Step 3 — ask GPT to answer in English
     answer_resp = client.chat.completions.create(
