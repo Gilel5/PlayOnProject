@@ -84,3 +84,12 @@ export async function getArchivedSessions(userId) {
   }
   return await res.json();
 }
+
+export async function getSessionMessages(sessionId) {
+  const res = await fetch(`${API_URL}/chat_sessions/${sessionId}/messages`);
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch session messages");
+  }
+  return await res.json();
+}
