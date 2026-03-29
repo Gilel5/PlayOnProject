@@ -13,6 +13,7 @@ from app.services.openai_services import get_data_chat_response
 from app.services.summary_report_services import generate_summary_reports
 from app.db.session import get_db
 from app.models.chat_session import ChatSession
+from app.models.chat_messages import ChatMessage
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -36,6 +37,10 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"OpenAI error: {str(e)}")
 
     if request.session_id:
+        #save the user's message
+        db.add(ChatMessage(session_id=request.session_id, role="user", text=request.message))
+        #Save chatbot response
+        db.add(ChatMessage(session_id=request.session_id, role="bot", text=reply))
         session = db.query(ChatSession).filter(ChatSession.id == request.session_id).first()
         if session:
             session.last_message_at = datetime.now(timezone.utc)

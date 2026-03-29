@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useContext } from "react";
 import { DarkModeContext } from "./DarkModeContext";
 import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
 import PdfAttachment from "./PdfAttachment";
@@ -145,7 +146,7 @@ export default function ChatArea({
             <UserMessage key={msg.id} text={msg.text} />
           ) : (
             <BotMessage key={msg.id}>
-              <p className="mb-2">{msg.text}</p>
+              <div className="prose prose-sm dark:prose-invert max-w-none"><ReactMarkdown>{msg.text}</ReactMarkdown></div>
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
           )
