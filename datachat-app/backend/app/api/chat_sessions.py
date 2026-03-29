@@ -5,6 +5,7 @@ import uuid
 
 from app.db.session import get_db
 from app.models.chat_session import ChatSession
+from app.models.chat_messages import ChatMessage
 
 router = APIRouter(prefix="/chat_sessions", tags=["chat_sessions"])
 
@@ -125,3 +126,13 @@ def delete_chat_session(session_id: uuid.UUID, db: Session = Depends(get_db)):
     db.delete(session)
     db.commit()
     return {"deleted": True}
+
+@router.get("/{session_id}/messages")
+def get_session_messages(session_id: uuid.UUID, db: Session = Depends(get_db)):
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+    return messages

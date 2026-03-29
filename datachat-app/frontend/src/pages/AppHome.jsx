@@ -6,6 +6,7 @@ import { sendChatMessage } from "../api/chat";
 import {
   createChatSession,
   getUserSessions,
+  getSessionMessages,
   pinSession,
   deleteSession,
   renameSession,
@@ -37,6 +38,8 @@ export default function AppHome() {
   const [uploadStatus, setUploadStatus] = useState(null);
   const abortControllerRef = useRef(null);
 
+  const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
+
   async function getAccessToken() {
     const existing = sessionStorage.getItem("access_token");
     if (existing) return existing;
@@ -61,6 +64,27 @@ export default function AppHome() {
       }
     })();
   }, [nav]);
+
+  useEffect(() => {
+    if (!activeChatId) return;
+    if (messagesMap[activeChatId]) return;
+
+    (async () => {
+      try {
+        const dbMessages = await getSessionMessages(activeChatId);
+        if (dbMessages.length > 0) {
+          const mapped = dbMessages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            text: m.text,
+          }));
+          setMessagesMap((prev) => ({ ...prev, [activeChatId]: [WELCOME_MESSAGE, ...mapped] }));
+        }
+      } catch (err) {
+        console.error("Failed to load messages", err);
+      }
+    })();
+  }, [activeChatId]);
 
   async function onLogout() {
     try { await logoutApi(); } finally {
@@ -234,7 +258,6 @@ export default function AppHome() {
     }
   }
 
-  const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
   const messages = activeChatId ? (messagesMap[activeChatId] || [WELCOME_MESSAGE]) : [WELCOME_MESSAGE];
 
   const { darkMode } = useContext(DarkModeContext);
