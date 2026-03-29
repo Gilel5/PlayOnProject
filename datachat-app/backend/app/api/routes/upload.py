@@ -178,7 +178,7 @@ async def upload_csv(
                     # Drop completely blank rows (empty lines in the CSV).
                     chunk = chunk.dropna(how="all")
 
-                    # Strip any leading "$" from currency columns so they can be
+                    # Strip any leading $ from currency columns so they can be
                     # stored as numeric without causing a type error.
                     for col in ("retail_amount", "base_amount", "sales_tax_amount"):
                         if col in chunk.columns:
@@ -191,7 +191,6 @@ async def upload_csv(
                             chunk[col] = pd.to_numeric(chunk[col], errors="coerce")
 
                     # Parse known date/timestamp columns into Python datetime objects.
-                    # psycopg2 maps these directly to PostgreSQL's timestamp with time zone.
                     for col in ("transaction_date", "date"):
                         if col in chunk.columns:
                             chunk[col] = pd.to_datetime(
