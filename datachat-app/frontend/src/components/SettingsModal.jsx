@@ -1,12 +1,17 @@
 import { useState, useEffect, useRef, useContext } from "react";
 import { DarkModeContext } from "./DarkModeContext"
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react";
-import { getArchivedSessions, restoreSession } from "../api/chatSessions";
+import { getArchivedSessions } from "../api/chatSessions";
 
 export default function SettingsModal({ user, onClose, onLogout, onDelete, onRestoreChat, changeName, changeEmail }) {
   const { darkMode, setDarkMode } = useContext(DarkModeContext);
   const [archivedSessions, setArchivedSessions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [editableName, setEditableName] = useState("");
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const [nameSuccess, setNameSuccess] = useState("");
   // track which archived item's menu is open (id acts as key)
   const [openMenu, setOpenMenu] = useState(null);
   const modalRef = useRef(null);
@@ -31,6 +36,12 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
     fetchArchivedSessions();
   }, [user?.id]);
 
+  const currentName = user?.display_name || user?.email?.split("@")[0] || "User";
+
+  useEffect(() => {
+    setEditableName(currentName);
+  }, [currentName]);
+
   const handleRestore = async (sessionId) => {
     try {
       await onRestoreChat(sessionId);
@@ -38,6 +49,46 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
       setOpenMenu(null);
     } catch (error) {
       console.error("Failed to restore session:", error);
+    }
+  };
+
+  const handleOpenNameModal = () => {
+    setEditableName(currentName);
+    setNameError("");
+    setNameSuccess("");
+    setShowNameModal(true);
+  };
+
+  const handleSaveName = async () => {
+    if (typeof changeName !== "function") {
+      setNameError("Name change is not available right now.");
+      return;
+    }
+
+    const trimmed = editableName.trim();
+    if (trimmed.length < 2) {
+      setNameError("Name must be at least 2 characters.");
+      setNameSuccess("");
+      return;
+    }
+
+    if (trimmed === currentName) {
+      setNameError("Please enter a new name before saving.");
+      setNameSuccess("");
+      return;
+    }
+
+    try {
+      setIsSavingName(true);
+      setNameError("");
+      await changeName(trimmed);
+      setNameSuccess("Name updated successfully.");
+      setShowNameModal(false);
+    } catch (error) {
+      setNameSuccess("");
+      setNameError(error?.message || "Failed to update name.");
+    } finally {
+      setIsSavingName(false);
     }
   };
 
@@ -87,13 +138,15 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                   <User size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Name</span>
                 </div>
-                <span className={`text-sm text-gray-900 font-medium ${darkMode ? "text-white" : "text-black"}`}>{user?.email.substring(0, user?.email.indexOf('@')) || "User"}</span>
+                <span className={`text-sm text-gray-900 font-medium ${darkMode ? "text-white" : "text-black"}`}>{currentName}</span>
                 <button 
-                onClick={changeName}
+                onClick={handleOpenNameModal}
                 className={`px-4 py-1.5 text-xs font-medium rounded-full hover:bg-gray-700 transition-colors ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}>
                   Change Name
                 </button>
               </div>
+              {nameError && <p className="text-xs text-red-500">{nameError}</p>}
+              {nameSuccess && <p className="text-xs text-emerald-500">{nameSuccess}</p>}
               
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-3 text-gray-600">
@@ -214,6 +267,44 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
           </section>
         </div>
       </div>
+
+      {showNameModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !isSavingName && setShowNameModal(false)} />
+          <div className={`relative w-full max-w-md mx-4 rounded-2xl shadow-2xl p-6 ${darkMode ? "bg-neutral-950" : "bg-white"}`}>
+            <h3 className={`text-base font-semibold mb-4 ${darkMode ? "text-white" : "text-black"}`}>Change Name</h3>
+
+            <label className={`block text-sm mb-2 ${darkMode ? "text-gray-200" : "text-gray-700"}`}>Display name</label>
+            <input
+              value={editableName}
+              onChange={(e) => setEditableName(e.target.value)}
+              disabled={isSavingName}
+              className={`w-full px-3 py-2 rounded-md border text-sm ${darkMode ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-gray-300 text-black"}`}
+              placeholder="Enter display name"
+              autoFocus
+            />
+
+            {nameError && <p className="mt-2 text-xs text-red-500">{nameError}</p>}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setShowNameModal(false)}
+                disabled={isSavingName}
+                className={`px-4 py-2 text-xs font-medium rounded-full border transition-colors disabled:opacity-60 ${darkMode ? "border-neutral-700 text-white hover:bg-neutral-900" : "border-gray-300 text-black hover:bg-gray-100"}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveName}
+                disabled={isSavingName}
+                className={`px-4 py-2 text-xs font-medium rounded-full transition-colors disabled:opacity-60 ${darkMode ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-700"}`}
+              >
+                {isSavingName ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

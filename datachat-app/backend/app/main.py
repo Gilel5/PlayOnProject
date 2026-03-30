@@ -8,6 +8,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 from app.api.routes.upload import router as upload_router
 from app.db.session import engine
 from app.db.base import Base
@@ -50,3 +51,20 @@ def health():
 
 #Local Table Creation
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_user_display_name_column() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "users" not in table_names:
+        return
+
+    column_names = {col["name"] for col in inspector.get_columns("users")}
+    if "display_name" in column_names:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN display_name VARCHAR(120)"))
+
+
+ensure_user_display_name_column()
