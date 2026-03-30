@@ -38,10 +38,12 @@ datachat-app/
 │   │   │   ├── messages/          # User and bot message bubbles
 │   │   │   ├── ChatArea.jsx       # Main chat interface
 │   │   │   ├── Sidebar.jsx        # Session list and navigation
-│   │   │   └── SummaryReport.jsx  # Data visualization
+│   │   │   ├── SummaryReport.jsx  # Data visualization
+│   │   │   ├── RightPanel.jsx     # Side analytics reporting panel
+│   │   │   └── SettingsModal.jsx  # Settings layout and renaming
 │   │   ├── pages/
-│   │   │   ├── AppHome.jsx
-│   │   │   ├── Login.jsx
+│   │   │   ├── AppHome.jsx        # Central UI router shell
+│   │   │   ├── Login.jsx          # Auth layouts
 │   │   │   └── Register.jsx
 │   │   └── App.jsx
 │   ├── package.json
@@ -49,13 +51,18 @@ datachat-app/
 └── backend/
     └── app/
         ├── api/
+        │   ├── chat_sessions.py   # Historical DB routing
         │   └── routes/
         │       ├── chat.py        # LLM completion endpoint
+        │       ├── auth.py        # API authentication keys
         │       └── upload.py      # File upload handling
         ├── core/
         │   └── config.py
+        ├── models/                # Database ORM classes
+        ├── schemas/               # Pydantic validation schemas
         ├── services/
-        │   └── openai_services.py
+        │   ├── openai_services.py # NLP integrations
+        │   └── summary_report_services.py 
         └── main.py
 ```
 
