@@ -5,9 +5,16 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
+
+def _normalize_postgres_url(url: str) -> str:
+    # Supabase often provides postgresql:// URLs; force psycopg driver explicitly.
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
+
 #Creating the engine using the local Database URL
 #pool_pre_ping=True checks connections
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(_normalize_postgres_url(settings.DATABASE_URL), pool_pre_ping=True)
 
 #SessionLocal creates new DB sessions
 #autocommit=False means you control commits

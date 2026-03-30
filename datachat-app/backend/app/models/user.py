@@ -1,6 +1,7 @@
 #Define the "users" table.
 #What we store:
 #email (unique)
+#display_name (editable profile name)
 #password_hash (bcrypt hash, never store raw password)
 #is_active flag
 #created_at timestamp
@@ -28,6 +29,11 @@ class User(Base):
         unique=True,
         index=True,
         nullable=False
+    )
+
+    display_name: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True
     )
 
     #store hashed password

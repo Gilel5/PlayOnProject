@@ -79,3 +79,16 @@ export async function me(accessToken) {
     }
 }
 
+export async function updateDisplayName(accessToken, displayName) {
+    try {
+        const res = await api.patch(
+            "/auth/me/name",
+            { display_name: displayName },
+            { headers: { Authorization: "Bearer " + accessToken } }
+        );
+        return res.data;
+    } catch (err) {
+        throw new Error(getAxiosErrorMessage(err));
+    }
+}
+

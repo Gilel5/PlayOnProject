@@ -31,7 +31,8 @@ def register_user(db: Session, email: str, password: str) -> User:
         raise ValueError("Email already registered")
     
     #hash password
-    user = User(email=email, password_hash=hash_password(password))
+    default_name = email.split("@", 1)[0].strip() or "User"
+    user = User(email=email, display_name=default_name, password_hash=hash_password(password))
     db.add(user)
     db.commit()
     db.refresh(user)

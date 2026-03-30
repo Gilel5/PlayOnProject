@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.auth import RegisterIn, LoginIn, TokenOut
-from app.schemas.user import UserOut
+from app.schemas.user import UserOut, UpdateDisplayNameIn
 from app.models.user import User
 from app.core.security import decode_token
 from app.core.config import settings
@@ -44,6 +44,24 @@ def clear_refresh_cookie(resp: Response):
         domain=settings.COOKIE_DOMAIN,
         path="/auth"
     )
+
+
+def get_current_user(
+    creds: HTTPAuthorizationCredentials | None,
+    db: Session,
+) -> User:
+    if not creds:
+        raise HTTPException(status_code=401, detail="Missing access token")
+    try:
+        payload = decode_token(creds.credentials)
+        user_id = payload["sub"]
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
     
 @router.post("/register", response_model=TokenOut)
 def register(data: RegisterIn, resp: Response, db: Session = Depends(get_db)):
@@ -116,15 +134,21 @@ def me(creds: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session
     #Current user endpoint
         # requires authorization
         #decode token and load user from DB
-    if not creds:
-        raise HTTPException(status_code=401, detail="Missing access token")
-    try:
-        payload = decode_token(creds.credentials)
-        user_id = payload["sub"]
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid access token")
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    
+    return get_current_user(creds, db)
+
+
+@router.patch("/me/name", response_model=UserOut)
+def update_my_display_name(
+    body: UpdateDisplayNameIn,
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(creds, db)
+    new_name = body.display_name.strip()
+    if len(new_name) < 2:
+        raise HTTPException(status_code=400, detail="Display name must be at least 2 characters")
+
+    user.display_name = new_name
+    db.commit()
+    db.refresh(user)
     return user
