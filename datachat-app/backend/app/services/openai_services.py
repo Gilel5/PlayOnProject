@@ -45,7 +45,7 @@ def get_table_schema() -> str:
 # Original simple chat (no data context)
 def get_chat_response(message: str) -> str:
     completion = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.4",
         messages=[{"role": "user", "content": message}],
     )
     return completion.choices[0].message.content
@@ -109,7 +109,7 @@ def get_data_chat_response(message: str) -> str:
 
     # Step 1 — ask GPT to write SQL
     sql_resp = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.4",
         temperature=0,
         messages=[
             {"role": "system", "content": _SQL_SYSTEM_PROMPT.format(table=TABLE)},
@@ -133,7 +133,7 @@ def get_data_chat_response(message: str) -> str:
 
     # Step 3 — ask GPT to answer in English
     answer_resp = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.4",
         messages=[
             {"role": "system", "content": _ANSWER_SYSTEM_PROMPT},
             {
