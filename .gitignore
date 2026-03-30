@@ -21,3 +21,5 @@ venv/
 *.code-workspace
 
 .DS_Store.env
+
+.DS_Store

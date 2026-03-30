@@ -16,13 +16,13 @@ export default function RightPanel({ onClose }) {
   const { darkMode } = useContext(DarkModeContext);
   return (
     <aside className={`w-96 flex-shrink-0 flex flex-col h-full overflow-y-auto border-l ${darkMode ? "bg-black border-slate-800 text-white" : "bg-white border-gray-100 text-gray-900"}`}>
-      <div className={`flex items-center justify-between px-4 py-4 border-b ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
+      <div className={`h-16 flex items-center justify-between px-4 border-b flex-shrink-0 ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
         <div className="flex items-center gap-2">
           <button
             onClick={onClose}
             className={`w-8 h-6 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${darkMode ? "bg-slate-800 text-slate-100" : "bg-white text-gray-900"}`}
           >
-            <LayoutTemplate size={16} />
+            <LayoutTemplate size={18} />
           </button>
           <span className={`font-semibold text-sm ${darkMode ? "text-white" : "text-gray-900"}`}>Analytics</span>
         </div>
@@ -54,9 +54,9 @@ export default function RightPanel({ onClose }) {
               <div key={item.label} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                  <span className="text-xs text-gray-600">{item.label}</span>
+                  <span className={`text-xs ${darkMode ? "text-slate-400" : "text-gray-600"}`}>{item.label}</span>
                 </div>
-                <span className="text-xs font-medium text-gray-700">{item.pct}</span>
+                <span className={`text-xs font-medium ${darkMode ? "text-slate-300" : "text-gray-700"}`}>{item.pct}</span>
               </div>
             ))}
           </div>

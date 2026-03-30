@@ -58,6 +58,31 @@ def get_archived_sessions(user_id: uuid.UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/user/{user_id}/search")
+def search_user_sessions(user_id: uuid.UUID, q: str, db: Session = Depends(get_db)):
+    from sqlalchemy import or_, and_
+    if not q:
+        return []
+
+    search_pattern = f"%{q}%"
+    matches = (
+        db.query(ChatSession.id)
+        .outerjoin(ChatMessage, ChatSession.id == ChatMessage.session_id)
+        .filter(
+            and_(
+                ChatSession.user_id == user_id,
+                ChatSession.is_archived == False,
+                or_(
+                    ChatSession.chat_title.ilike(search_pattern),
+                    ChatMessage.text.ilike(search_pattern)
+                )
+            )
+        )
+        .distinct()
+        .all()
+    )
+    return [str(match[0]) for match in matches]
+
 @router.put("/{session_id}/title")
 def update_chat_title(session_id: uuid.UUID, title: str, db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
@@ -136,3 +161,9 @@ def get_session_messages(session_id: uuid.UUID, db: Session = Depends(get_db)):
         .all()
     )
     return messages
+
+@router.delete("/{session_id}/messages")
+def clear_session_messages(session_id: uuid.UUID, db: Session = Depends(get_db)):
+    db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete()
+    db.commit()
+    return {"cleared": True}
