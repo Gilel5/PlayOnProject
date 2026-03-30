@@ -93,3 +93,14 @@ export async function getSessionMessages(sessionId) {
   }
   return await res.json();
 }
+
+export async function clearSessionMessages(sessionId) {
+  const res = await fetch(`${API_URL}/chat_sessions/${sessionId}/messages`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to clear session messages");
+  }
+  return await res.json();
+}

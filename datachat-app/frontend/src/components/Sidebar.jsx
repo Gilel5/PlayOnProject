@@ -17,6 +17,7 @@ export default function Sidebar({
   onSettingsOpen,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [matchingSessionIds, setMatchingSessionIds] = useState(null);
   const [openMenu, setOpenMenu] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const { darkMode } = useContext(DarkModeContext);
@@ -80,9 +81,36 @@ export default function Sidebar({
     setRenameValue("");
   }
 
-  const filteredSessions = sessions.filter((session) =>
-    session.chat_title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+
+
+  // Debounced API call to fetch matching session IDs using messages and titles
+  useEffect(() => {
+    if (!searchQuery.trim() || !user?.id) {
+      setMatchingSessionIds(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/chat_sessions/user/${user.id}/search?q=${encodeURIComponent(searchQuery.trim())}`);
+        if (res.ok) {
+          const ids = await res.json();
+          setMatchingSessionIds(ids);
+        }
+      } catch (err) {
+        console.error("Search failed:", err);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, user?.id]);
+
+  const filteredSessions = sessions.filter((session) => {
+    if (!searchQuery.trim()) return true;
+    if (session.chat_title.toLowerCase().includes(searchQuery.trim().toLowerCase())) return true;
+    if (matchingSessionIds && matchingSessionIds.includes(session.id)) return true;
+    return false;
+  });
   const filteredPinned = filteredSessions.filter((session) => session.is_pinned);
   const filteredChats = filteredSessions.filter((session) => !session.is_pinned);
 
@@ -95,20 +123,20 @@ export default function Sidebar({
       className={`w-72 flex-shrink-0 flex flex-col h-full border-r ${darkMode ? "bg-black border-slate-800 text-white" : "bg-white border-gray-100 text-gray-900"}`}
     >
       {/* Top bar */}
-      <div className={`flex items-center justify-between px-4 py-4 border-b ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
+      <div className={`h-16 flex items-center justify-between px-4 border-b flex-shrink-0 ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
         <div className="flex items-center gap-2">
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
           >
-            <Menu size={18} className="text-gray-600" />
+            <Menu size={18} className={darkMode ? "text-slate-200" : "text-gray-700"} />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-6 rounded-lg bg-[#5BC5D0] text-gray-900 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${darkMode ? "bg-indigo-500" : "bg-[#5BC5D0]"}`}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path
                   d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
-                  stroke="black"
+                  stroke={darkMode ? "white" : "black"}
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -118,8 +146,8 @@ export default function Sidebar({
             <span className={darkMode ? "font-semibold text-white text-sm" : "font-semibold text-gray-900 text-sm"}>DataChat</span>
           </div>
         </div>
-        <button onClick={onCreateChat} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-          <Plus size={18} className="text-gray-600" />
+        <button onClick={onCreateChat} className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}>
+          <Plus size={18} className={darkMode ? "text-slate-200" : "text-gray-700"} />
         </button>
       </div>
 
@@ -184,7 +212,7 @@ export default function Sidebar({
         )}
         {filteredChats.length > 0 && (
           <div>
-            <p className="px-2 py-1 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <p className={`px-2 py-1 text-xs font-semibold uppercase tracking-wide ${darkMode ? "text-slate-400" : "text-gray-500"}`}>
               Chats
             </p>
             {filteredChats.map((chat) => (
@@ -232,29 +260,29 @@ export default function Sidebar({
       {openMenu && activeMenuSession && (
         <div
           style={{ position: "fixed", top: menuPosition.top, right: menuPosition.right }}
-          className="w-36 bg-white border border-gray-200 rounded shadow-lg z-50"
+          className={`w-36 rounded shadow-lg z-50 border ${darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-gray-200"}`}
         >
           <button
             onClick={() => startRename(activeMenuSession)}
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
           >
             Rename Chat
           </button>
           <button
             onClick={() => { onTogglePin(openMenu); setOpenMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
           >
             {activeMenuSession.is_pinned ? "Unpin Chat" : "Pin Chat"}
           </button>
           <button
             onClick={() => { onArchiveChat(openMenu); setOpenMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
           >
             Archive Chat
           </button>
           <button
             onClick={() => { setDeleteConfirmId(openMenu); setOpenMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100"
+            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-red-400" : "hover:bg-gray-100 text-red-600"}`}
           >
             Delete Chat
           </button>
@@ -301,7 +329,7 @@ export default function Sidebar({
           onClick={onSettingsOpen}
           className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
         >
-          <Settings size={16} className={darkMode ? "text-slate-200" : "text-gray-500"} />
+          <Settings size={16} className={darkMode ? "text-slate-200" : "text-gray-700"} />
         </button>
       </div>
     </aside>

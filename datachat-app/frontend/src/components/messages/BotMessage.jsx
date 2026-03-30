@@ -17,7 +17,7 @@ export default function BotMessage({ children }) {
           />
         </svg>
       </div>
-      <div className={`max-w-lg text-sm mt-1.5 ${darkMode ? "text-slate-100" : "text-gray-800"}`}>{children}</div>
+      <div className={`max-w-lg text-sm mt-1.5 ${darkMode ? "text-white" : "text-black"}`}>{children}</div>
     </div>
   );
 }

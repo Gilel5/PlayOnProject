@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useContext } from "react";
 import { DarkModeContext } from "./DarkModeContext"
-import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal } from "lucide-react";
+import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal, Pencil } from "lucide-react";
 import { getArchivedSessions } from "../api/chatSessions";
 
 export default function SettingsModal({ user, onClose, onLogout, onDelete, onRestoreChat, changeName, changeEmail }) {
@@ -118,12 +118,12 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
       {/* Modal */}
-    <div ref={modalRef} className={`relative rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto ${darkMode ? "bg-black" : "bg-white"}`}>
+    <div ref={modalRef} className={`relative rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[85vh] overflow-y-auto ${darkMode ? "bg-black" : "bg-white"}`}>
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-5 border-b border-gray-100`}>
+        <div className={`flex items-center justify-between px-6 py-5 border-b ${darkMode ? "border-slate-800" : "border-gray-100"}`}>
           <h2 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-black"}`}>Settings</h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 transition-colors">
-            <X size={18} className="text-gray-500" />
+          <button onClick={onClose} className={`p-1 rounded-full transition-colors ${darkMode ? "hover:bg-slate-800 text-slate-400" : "hover:bg-gray-100 text-gray-500"}`}>
+            <X size={18} />
           </button>
         </div>
 
@@ -131,25 +131,28 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
           {/* Profile */}
           <section>
             <h3 className={`text-sm font-semibold text-gray-900 mb-3 ${darkMode ? "text-white" : "text-black"}`}>Profile</h3>
-            <div className="border-t border-gray-100" />
+            <div className={`border-t ${darkMode ? "border-slate-800" : "border-gray-100"}`} />
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 text-gray-600">
+                <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <User size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Name</span>
                 </div>
-                <span className={`text-sm text-gray-900 font-medium ${darkMode ? "text-white" : "text-black"}`}>{currentName}</span>
-                <button 
-                onClick={handleOpenNameModal}
-                className={`px-4 py-1.5 text-xs font-medium rounded-full hover:bg-gray-700 transition-colors ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}>
-                  Change Name
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${darkMode ? "text-white" : "text-black"}`}>{currentName}</span>
+                  <button
+                    onClick={handleOpenNameModal}
+                    className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-700 text-slate-400 hover:text-white" : "hover:bg-gray-100 text-gray-700 hover:text-gray-900"}`}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
               </div>
               {nameError && <p className="text-xs text-red-500">{nameError}</p>}
               {nameSuccess && <p className="text-xs text-emerald-500">{nameSuccess}</p>}
               
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 text-gray-600">
+                <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="2" y="4" width="20" height="16" rx="2" />
                     <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
@@ -164,10 +167,10 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
           {/* Account */}
           <section>
             <h3 className={`text-sm font-semibold text-gray-900 mb-3 ${darkMode ? "text-white" : "text-black"}`}>Account</h3>
-            <div className="border-t border-gray-100" />
+            <div className={`border-t ${darkMode ? "border-slate-800" : "border-gray-100"}`} />
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 text-gray-600">
+                <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <Lock size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Change Password</span>
                 </div>
@@ -176,7 +179,7 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                 </button>
               </div>
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 text-gray-600">
+                <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <LogOut size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Sign Out</span>
                 </div>
@@ -187,7 +190,7 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                 </button>
               </div>
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 text-gray-600">
+                <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <Trash2 size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Delete Account</span>
                 </div>
@@ -197,7 +200,7 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                       onDelete();
                     }
                   }}
-                  className={`px-4 py-1.5 text-white text-xs font-medium rounded-full hover:bg-red-600 transition-colors ${darkMode ? "bg-red-900" : "bg-red-600"}`}>
+                  className={`px-4 py-1.5 text-white text-xs font-medium rounded-full hover:bg-red-600 transition-colors bg-red-600`}>
                   Delete Account
                 </button>
               </div>
@@ -207,16 +210,16 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
           {/* Appearance */}
           <section>
             <h3 className={`text-sm font-semibold mb-3 ${darkMode ? "text-white" : "text-black"}`}>Appearance</h3>
-            <div className="border-t border-gray-100" />
+            <div className={`border-t ${darkMode ? "border-slate-800" : "border-gray-100"}`} />
             <div className="mt-3">
               <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-3 text-gray-600">
+                <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <Sun size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Theme</span>
                 </div>
                 <button
                   onClick={() => setDarkMode(!darkMode)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${darkMode ? "bg-gray-900" : "bg-gray-300"}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${darkMode ? "bg-gray-400" : "bg-gray-300"}`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${darkMode ? "translate-x-6" : "translate-x-1"}`} />
                 </button>
@@ -227,7 +230,7 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
           {/* Archived */}
           <section>
             <h3 className={`text-sm font-semibold text-gray-900 mb-3 ${darkMode ? "text-white" : "text-black"}`}>Archived</h3>
-            <div className="border-t border-gray-100" />
+            <div className={`border-t ${darkMode ? "border-slate-800" : "border-gray-100"}`} />
             <div className="mt-3 space-y-2">
               {loading ? (
                 <div className="text-sm text-gray-500">Loading archived sessions...</div>
@@ -243,16 +246,16 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                       </span>
                       <button
                         data-menu-button
-                        className={`p-1 hover:bg-gray-100 rounded flex-shrink-0 ${darkMode ? "bg-gray-200" : "bg-white"}`}
+                        className={`p-1 rounded flex-shrink-0 transition-colors ${darkMode ? "hover:bg-slate-700 bg-black text-white" : "hover:bg-gray-100 bg-white text-gray-600"}`}
                         onClick={() => setOpenMenu(openMenu === session.id ? null : session.id)}
                       >
-                        <MoreHorizontal size={14} className="text-black" />
+                        <MoreHorizontal size={14} />
                       </button>
 
                       {openMenu === session.id && (
-                        <div ref={menuRef} className="absolute right-0 mt-12 w-32 bg-white border border-gray-200 rounded shadow-lg z-20" onClick={(e) => e.stopPropagation()}>
+                        <div ref={menuRef} className={`absolute right-0 mt-12 w-32 border rounded shadow-lg z-20 ${darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-gray-200"}`} onClick={(e) => e.stopPropagation()}>
                           <button
-                            className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-200" : "hover:bg-gray-100 text-gray-800"}`}
                             onClick={() => handleRestore(session.id)}
                           >
                             Restore

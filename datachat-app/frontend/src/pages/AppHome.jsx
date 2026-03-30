@@ -12,6 +12,7 @@ import {
   renameSession,
   archiveSession,
   restoreSession,
+  clearSessionMessages,
 } from "../api/chatSessions";
 
 import Sidebar from "../components/Sidebar";
@@ -265,6 +266,19 @@ export default function AppHome() {
     }
   }
 
+  async function handleClearChat() {
+    if (!activeChatId) return;
+    try {
+      await clearSessionMessages(activeChatId);
+      setMessagesMap(prev => ({
+        ...prev,
+        [activeChatId]: [WELCOME_MESSAGE]
+      }));
+    } catch (e) {
+      console.error("Failed to clear chat", e);
+    }
+  }
+
   const messages = activeChatId ? (messagesMap[activeChatId] || [WELCOME_MESSAGE]) : [WELCOME_MESSAGE];
 
   const { darkMode } = useContext(DarkModeContext);
@@ -301,6 +315,7 @@ export default function AppHome() {
 
       <ChatArea
         messages={messages}
+        activeChatTitle={sessions.find((s) => s.id === activeChatId)?.chat_title || "Chat"}
         input={input}
         setInput={setInput}
         files={files}
@@ -314,6 +329,7 @@ export default function AppHome() {
         onUploadCsv={handleUploadCsv}
         uploadStatus={uploadStatus}
         onCancelUpload={handleCancelUpload}
+        onClearChat={handleClearChat}
       />
 
       {rightPanelOpen && <RightPanel onClose={() => setRightPanelOpen(false)} />}
