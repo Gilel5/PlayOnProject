@@ -77,7 +77,12 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             db.rollback()
             raise HTTPException(status_code=500, detail=f"Chat save/summary error: {str(e)}")
 
-    return {"reply": reply}
+    return {
+        "reply": reply,
+        "session_id": str(session.id) if request.session_id and session else None,
+        "chat_title": session.chat_title if request.session_id and session else None,
+        "chat_summary": session.chat_summary if request.session_id and session else None,
+    }
 
 
 # Summary report -> downloadable Excel file
