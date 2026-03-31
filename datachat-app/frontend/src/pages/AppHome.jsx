@@ -280,7 +280,7 @@ export default function AppHome() {
   }
 
   const messages = activeChatId ? (messagesMap[activeChatId] || [WELCOME_MESSAGE]) : [WELCOME_MESSAGE];
-
+  const activeSession = sessions.find((s) => s.id === activeChatId);
   const { darkMode } = useContext(DarkModeContext);
 
   if (!user) {
@@ -332,7 +332,12 @@ export default function AppHome() {
         onClearChat={handleClearChat}
       />
 
-      {rightPanelOpen && <RightPanel onClose={() => setRightPanelOpen(false)} />}
+      {rightPanelOpen && (
+        <RightPanel
+          onClose={() => setRightPanelOpen(false)}
+          summary={activeSession?.chat_summary}
+        />
+      )}
 
 
       {showSettings && (
