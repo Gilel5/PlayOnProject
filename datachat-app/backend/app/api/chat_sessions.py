@@ -89,6 +89,7 @@ def update_chat_title(session_id: uuid.UUID, title: str, db: Session = Depends(g
 
     if session:
         session.chat_title = title
+        session.title_is_user_edited = True
         db.commit()
         db.refresh(session)
 

@@ -9,6 +9,7 @@ import uuid
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timezone
+from app.services.chat_summary_services import generate_chat_summary_and_title
 from app.services.openai_services import get_data_chat_response
 from app.services.summary_report_services import generate_summary_reports
 from app.db.session import get_db
@@ -45,6 +46,37 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         if session:
             session.last_message_at = datetime.now(timezone.utc)
             db.commit()
+        
+        # Re-query all messages for this session in chronological order
+        try:
+            messages = (
+                db.query(ChatMessage)
+                .filter(ChatMessage.session_id == request.session_id)
+                .order_by(ChatMessage.created_at.asc())
+                .all()
+            )
+
+            message_count = len(messages)
+            if message_count <= 4 or message_count % 6 == 0:
+                metadata = generate_chat_summary_and_title(messages)
+                generated_title = metadata.get("title")
+                generated_summary = metadata.get("summary")
+
+            # Save summary if your ChatSession model has this column
+            if generated_summary:
+                session.chat_summary = generated_summary
+
+            # Only auto-update title if it's still the default title
+            if generated_title and not session.title_is_user_edited and session.chat_title in [None, "", "New Chat"]:
+                session.chat_title = generated_title
+
+            db.commit()
+            db.refresh(session)
+
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Chat save/summary error: {str(e)}")
+
     return {"reply": reply}
 
 
