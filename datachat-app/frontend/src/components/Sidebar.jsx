@@ -322,7 +322,7 @@ export default function Sidebar({
             <User size={15} className={darkMode ? "text-slate-200" : "text-gray-600"} />
           </div>
           <span className={`text-sm font-medium truncate max-w-[120px] ${darkMode ? "text-gray-100" : "text-gray-800"}`}>
-            {user?.name || user?.email?.split("@")[0] || "User"}
+            {user?.display_name || user?.name || user?.email?.split("@")[0] || "User"}
           </span>
         </div>
         <button
