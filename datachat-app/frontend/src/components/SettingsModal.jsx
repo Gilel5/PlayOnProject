@@ -215,7 +215,7 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
               <div className="flex items-center justify-between py-2">
                 <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <Sun size={16} />
-                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Theme</span>
+                  <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Theme: {darkMode ? "Dark" : "Light"}</span>
                 </div>
                 <button
                   onClick={() => setDarkMode(!darkMode)}
