@@ -16,22 +16,52 @@ uploadApi.interceptors.request.use((config) => {
 /**
  * Upload a CSV File object to the backend.
  * @param {File} file
- * @param {function} onProgress  — called with 0-100 integer
+ * @param {function} onProgress  — called with (percent: 0-100, loaded: bytes, total: bytes) for the upload phase
+ * @param {function} onServerProgress  — called with {phase, rows_processed, total_rows} for server-side progress
+ * @param {AbortSignal} signal
  * @returns {Promise<{ rows_inserted: number, table: string }>}
  */
-export async function uploadCsv(file, onProgress, signal) {
+export async function uploadCsv(file, onProgress, onServerProgress, signal) {
   const form = new FormData();
   form.append("file", file);
 
-  const { data } = await uploadApi.post("/upload/csv", form, {
-    headers: { "Content-Type": "multipart/form-data" },
-    signal,
-    onUploadProgress: (e) => {
-      if (onProgress && e.total) {
-        onProgress(Math.round((e.loaded * 100) / e.total));
-      }
-    },
-  });
+  const jobId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `job-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-  return data;
+  // Poll the server for processing progress in parallel with the upload.
+  let pollInterval = null;
+  if (onServerProgress) {
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await uploadApi.get(`/upload/status/${jobId}`);
+        onServerProgress(res.data);
+        if (["done", "error", "cancelled"].includes(res.data.phase)) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+      } catch {
+        // Ignore poll failures — next tick will retry.
+      }
+    }, 500);
+  }
+
+  try {
+    const { data } = await uploadApi.post("/upload/csv", form, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        "X-Upload-Job-Id": jobId,
+      },
+      signal,
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) {
+          onProgress(Math.round((e.loaded * 100) / e.total), e.loaded, e.total);
+        }
+      },
+    });
+    return data;
+  } finally {
+    if (pollInterval) clearInterval(pollInterval);
+  }
 }
