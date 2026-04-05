@@ -132,11 +132,11 @@ export default function ChatArea({
                 color: #111827 !important; 
                 box-shadow: none !important;
              }
-             .bg-sky-700, 
              .bg-slate-700, 
              .bg-slate-800, 
              .bg-slate-900, 
              .bg-black,
+             .bg-indigo-500,
              .bg-\\[\\#5BC5D0\\] {
                 background-color: #f3f4f6 !important;
                 border: 1px solid #e5e7eb !important;
@@ -423,7 +423,7 @@ export default function ChatArea({
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                 input.trim() && !isLoading
                   ? darkMode
-                    ? "bg-sky-700 text-white hover:bg-sky-800"
+                    ? "bg-indigo-500 text-white hover:bg-indigo-600"
                     : "bg-[#5BC5D0] text-black hover:bg-[#5BC5D0]"
                   : darkMode
                     ? "bg-slate-700 text-white cursor-not-allowed"
