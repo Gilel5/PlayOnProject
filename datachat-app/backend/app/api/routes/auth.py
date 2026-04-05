@@ -5,7 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.schemas.auth import RegisterIn, LoginIn, TokenOut
+from app.schemas.auth import RegisterIn, LoginIn, TokenOut, ChangePasswordIn
 from app.schemas.user import UserOut, UpdateDisplayNameIn
 from app.models.user import User
 from app.core.security import decode_token
@@ -16,6 +16,7 @@ from app.services.auth_services import (
     issue_tokens,
     rotate_refresh,
     revoke_refresh,
+    change_user_password,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -152,3 +153,21 @@ def update_my_display_name(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/me/password")
+def change_my_password(
+    body: ChangePasswordIn,
+    resp: Response,
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+):
+    # Change password for the currently authenticated user.
+    # Requires current password. Revokes all refresh tokens and clears the cookie.
+    user = get_current_user(creds, db)
+    try:
+        change_user_password(db, user, body.current_password, body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    clear_refresh_cookie(resp)
+    return {"ok": True}
