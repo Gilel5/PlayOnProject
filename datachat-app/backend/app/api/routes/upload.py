@@ -19,6 +19,9 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 bearer = HTTPBearer()
 logger = logging.getLogger(__name__)
 
+# Maximum accepted upload size in bytes (1 GB).
+MAX_UPLOAD_SIZE_BYTES = 1024 * 1024 * 1024
+
 # How many rows are processed at a time during the CSV read/clean phase.
 # This keeps memory usage flat regardless of file size.
 CHUNK_SIZE = 100_000
@@ -160,12 +163,25 @@ async def upload_csv(
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are accepted.")
 
+    # Reject files larger than the configured limit early (via Content-Length header)
+    # before we spend time reading the body into memory.
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > MAX_UPLOAD_SIZE_BYTES:
+        _set_progress(job_id, {"phase": "error"})
+        raise HTTPException(status_code=413, detail="File is too large. Maximum size is 1 GB.")
+
     table_name = settings.FINANCE_TABLE_NAME
 
     # Step 2 — Read the entire file into a memory buffer (io.BytesIO).
     # This avoids writing to disk on the backend server, which reduces disk I/O
     # and speeds up concurrent uploads significantly.
     contents = await file.read()
+
+    # Double-check size in case the Content-Length header was missing or inaccurate.
+    if len(contents) > MAX_UPLOAD_SIZE_BYTES:
+        _set_progress(job_id, {"phase": "error"})
+        raise HTTPException(status_code=413, detail="File is too large. Maximum size is 1 GB.")
+
     buf = io.BytesIO(contents)
 
     # Count total data rows by counting newlines (fast, even for 300MB files).

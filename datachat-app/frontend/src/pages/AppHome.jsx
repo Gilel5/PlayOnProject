@@ -166,6 +166,12 @@ export default function AppHome() {
   }
 
   async function handleUploadCsv(file) {
+    const MAX_UPLOAD_SIZE = 1024 * 1024 * 1024; // 1 GB
+    if (file.size > MAX_UPLOAD_SIZE) {
+      setUploadStatus({ error: "File is too large. Maximum size is 1 GB." });
+      setTimeout(() => setUploadStatus(null), 8000);
+      return;
+    }
     abortControllerRef.current = new AbortController();
     const startedAt = Date.now();
     const total = file.size;
