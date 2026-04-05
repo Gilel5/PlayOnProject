@@ -167,9 +167,37 @@ export default function AppHome() {
 
   async function handleUploadCsv(file) {
     abortControllerRef.current = new AbortController();
-    setUploadStatus("uploading");
+    const startedAt = Date.now();
+    const total = file.size;
+    let uploadDone = false;
+    const processingStartedAtRef = { current: null };
+    setUploadStatus({ phase: "uploading", percent: 0, loaded: 0, total, startedAt });
     try {
-      const result = await uploadCsv(file, () => {}, abortControllerRef.current.signal);
+      const result = await uploadCsv(
+        file,
+        (percent, loaded) => {
+          if (percent >= 100) {
+            uploadDone = true;
+          } else {
+            setUploadStatus({ phase: "uploading", percent, loaded, total, startedAt });
+          }
+        },
+        (serverProgress) => {
+          // Ignore server progress until bytes are on the wire, then show it.
+          if (!uploadDone) return;
+          const { phase, rows_processed = 0, total_rows = 0 } = serverProgress;
+          if (phase === "unknown" || phase === "done") return;
+          if (!processingStartedAtRef.current) processingStartedAtRef.current = Date.now();
+          setUploadStatus({
+            phase: "processing",
+            serverPhase: phase,
+            rows_processed,
+            total_rows,
+            startedAt: processingStartedAtRef.current,
+          });
+        },
+        abortControllerRef.current.signal,
+      );
       setUploadStatus(result);
       setTimeout(() => setUploadStatus(null), 6000);
     } catch (err) {
