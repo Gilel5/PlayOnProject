@@ -3,7 +3,7 @@ import { DarkModeContext } from "./DarkModeContext"
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal, Pencil } from "lucide-react";
 import { getArchivedSessions } from "../api/chatSessions";
 
-export default function SettingsModal({ user, onClose, onLogout, onDelete, onRestoreChat, changeName, changeEmail }) {
+export default function SettingsModal({ user, onClose, onLogout, onDelete, onRestoreChat, changeName, changePassword, changeEmail }) {
   const { darkMode, setDarkMode } = useContext(DarkModeContext);
   const [archivedSessions, setArchivedSessions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -12,6 +12,13 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
   const [isSavingName, setIsSavingName] = useState(false);
   const [nameError, setNameError] = useState("");
   const [nameSuccess, setNameSuccess] = useState("");
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
   // track which archived item's menu is open (id acts as key)
   const [openMenu, setOpenMenu] = useState(null);
   const modalRef = useRef(null);
@@ -89,6 +96,59 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
       setNameError(error?.message || "Failed to update name.");
     } finally {
       setIsSavingName(false);
+    }
+  };
+
+  const handleOpenPasswordModal = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
+    setPasswordSuccess("");
+    setShowPasswordModal(true);
+  };
+
+  const handleSavePassword = async () => {
+    if (typeof changePassword !== "function") {
+      setPasswordError("Password change is not available right now.");
+      return;
+    }
+
+    if (!currentPassword) {
+      setPasswordError("Please enter your current password.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      setPasswordError("New password must be different from the current one.");
+      setPasswordSuccess("");
+      return;
+    }
+
+    try {
+      setIsSavingPassword(true);
+      setPasswordError("");
+      await changePassword(currentPassword, newPassword);
+      setPasswordSuccess("Password updated successfully.");
+      setShowPasswordModal(false);
+    } catch (error) {
+      setPasswordSuccess("");
+      setPasswordError(error?.message || "Failed to update password.");
+    } finally {
+      setIsSavingPassword(false);
     }
   };
 
@@ -174,10 +234,13 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                   <Lock size={16} />
                   <span className={`text-sm ${darkMode ? "text-white" : "text-black"}`}>Change Password</span>
                 </div>
-                <button className={`px-4 py-1.5 text-xs font-medium rounded-full hover:bg-gray-700 transition-colors ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}>
+                <button
+                  onClick={handleOpenPasswordModal}
+                  className={`px-4 py-1.5 text-xs font-medium rounded-full hover:bg-gray-700 transition-colors ${darkMode ? "bg-white text-black" : "bg-black text-white"}`}>
                   Password Reset
                 </button>
               </div>
+              {passwordSuccess && <p className="text-xs text-emerald-500">{passwordSuccess}</p>}
               <div className="flex items-center justify-between py-2">
                 <div className={`flex items-center gap-3 ${darkMode ? "text-slate-400" : "text-gray-600"}`}>
                   <LogOut size={16} />
@@ -303,6 +366,69 @@ export default function SettingsModal({ user, onClose, onLogout, onDelete, onRes
                 className={`px-4 py-2 text-xs font-medium rounded-full transition-colors disabled:opacity-60 ${darkMode ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-700"}`}
               >
                 {isSavingName ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !isSavingPassword && setShowPasswordModal(false)} />
+          <div className={`relative w-full max-w-md mx-4 rounded-2xl shadow-2xl p-6 ${darkMode ? "bg-neutral-950" : "bg-white"}`}>
+            <h3 className={`text-base font-semibold mb-4 ${darkMode ? "text-white" : "text-black"}`}>Change Password</h3>
+
+            <label className={`block text-sm mb-2 ${darkMode ? "text-gray-200" : "text-gray-700"}`}>Current password</label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              disabled={isSavingPassword}
+              className={`w-full px-3 py-2 rounded-md border text-sm ${darkMode ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-gray-300 text-black"}`}
+              placeholder="Enter current password"
+              autoFocus
+            />
+
+            <label className={`block text-sm mt-3 mb-2 ${darkMode ? "text-gray-200" : "text-gray-700"}`}>New password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              disabled={isSavingPassword}
+              className={`w-full px-3 py-2 rounded-md border text-sm ${darkMode ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-gray-300 text-black"}`}
+              placeholder="Enter new password"
+            />
+
+            <label className={`block text-sm mt-3 mb-2 ${darkMode ? "text-gray-200" : "text-gray-700"}`}>Confirm new password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              disabled={isSavingPassword}
+              className={`w-full px-3 py-2 rounded-md border text-sm ${darkMode ? "bg-neutral-900 border-neutral-700 text-white" : "bg-white border-gray-300 text-black"}`}
+              placeholder="Re-enter new password"
+            />
+
+            <p className={`mt-2 text-[11px] ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+              Must be 8+ characters with uppercase, lowercase, number, and special character.
+            </p>
+
+            {passwordError && <p className="mt-2 text-xs text-red-500">{passwordError}</p>}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                disabled={isSavingPassword}
+                className={`px-4 py-2 text-xs font-medium rounded-full border transition-colors disabled:opacity-60 ${darkMode ? "border-neutral-700 text-white hover:bg-neutral-900" : "border-gray-300 text-black hover:bg-gray-100"}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSavePassword}
+                disabled={isSavingPassword}
+                className={`px-4 py-2 text-xs font-medium rounded-full transition-colors disabled:opacity-60 ${darkMode ? "bg-white text-black hover:bg-gray-200" : "bg-black text-white hover:bg-gray-700"}`}
+              >
+                {isSavingPassword ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

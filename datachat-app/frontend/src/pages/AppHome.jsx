@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { DarkModeContext } from "../components/DarkModeContext";
-import { me, refresh, logout as logoutApi, updateDisplayName } from "../api/auth";
+import { me, refresh, logout as logoutApi, updateDisplayName, changePassword } from "../api/auth";
 import { sendChatMessage } from "../api/chat";
 import {
   createChatSession,
@@ -103,6 +103,11 @@ export default function AppHome() {
     const updatedUser = await updateDisplayName(token, newName);
     setUser(updatedUser);
     return updatedUser;
+  }
+
+  async function handleChangePassword(currentPassword, newPassword) {
+    const token = await getAccessToken();
+    await changePassword(token, currentPassword, newPassword);
   }
 
   function removeFile(label) {
@@ -347,6 +352,7 @@ export default function AppHome() {
           onLogout={onLogout}
           onRestoreChat={handleRestoreChat}
           changeName={handleChangeName}
+          changePassword={handleChangePassword}
         />
       )}
     </div>

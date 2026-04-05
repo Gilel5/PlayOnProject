@@ -103,3 +103,20 @@ def revoke_refresh(db: Session, refresh_token: str) -> None:
     if row and row.revoked_at is None:
         row.revoked_at = datetime.now(timezone.utc)
         db.commit()
+
+def change_user_password(db: Session, user: User, current_password: str, new_password: str) -> None:
+    # Verify current password, set new hash, and revoke all active refresh tokens
+    if not verify_password(current_password, user.password_hash):
+        raise ValueError("Current password is incorrect")
+    if verify_password(new_password, user.password_hash):
+        raise ValueError("New password must be different from the current password")
+
+    user.password_hash = hash_password(new_password)
+
+    # Revoke all active refresh tokens so other sessions are signed out
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id,
+        RefreshToken.revoked_at.is_(None),
+    ).update({"revoked_at": datetime.now(timezone.utc)})
+
+    db.commit()
