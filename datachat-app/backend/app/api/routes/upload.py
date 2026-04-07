@@ -139,7 +139,6 @@ def list_uploaded_files(user=Depends(_require_auth), db: Session = Depends(get_d
     """Return distinct CSV files uploaded by the current user, newest first."""
     uploads = (
         db.query(FileUpload)
-        .filter_by(user_id=user["sub"])
         .order_by(FileUpload.uploaded_at.desc())
         .all()
     )
@@ -151,7 +150,7 @@ def list_uploaded_files(user=Depends(_require_auth), db: Session = Depends(get_d
         seen.add(u.filename)
         result.append({
             "filename": u.filename,
-            "file_size": float(u.file_size),
+            "rows_inserted": int(u.rows_inserted),
             "uploaded_at": u.uploaded_at.isoformat(),
         })
     return result
