@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
+from app.models.refresh_token import RefreshToken
+from app.models.chat_session import ChatSession
 from app.db.session import get_db
 from app.schemas.auth import RegisterIn, LoginIn, TokenOut
 from app.schemas.user import UserOut, UpdateDisplayNameIn
@@ -135,6 +137,35 @@ def me(creds: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session
         # requires authorization
         #decode token and load user from DB
     return get_current_user(creds, db)
+
+
+@router.delete("/me")
+def delete_my_account(
+    resp: Response,
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+):
+    user = get_current_user(creds, db)
+
+    try:
+        # Delete all refresh tokens for this user
+        db.query(RefreshToken).filter(RefreshToken.user_id == user.id).delete()
+
+        # Delete all chat sessions for this user
+        # Chat messages should be deleted via DB cascade from chat_sessions -> chat_messages
+        db.query(ChatSession).filter(ChatSession.user_id == user.id).delete()
+
+        # Delete the user row itself
+        db.delete(user)
+
+        db.commit()
+        clear_refresh_cookie(resp)
+
+        return {"deleted": True}
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
 
 
 @router.patch("/me/name", response_model=UserOut)
