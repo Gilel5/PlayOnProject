@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { DarkModeContext } from "../components/DarkModeContext";
-import { me, refresh, logout as logoutApi, updateDisplayName } from "../api/auth";
+import { me, refresh, logout as logoutApi, updateDisplayName, deleteMyAccount } from "../api/auth";
 import { sendChatMessage } from "../api/chat";
 import {
   createChatSession,
@@ -279,6 +279,19 @@ export default function AppHome() {
     }
   }
 
+  async function handleDeleteAccount() {
+    try {
+      const token = await getAccessToken();
+      await deleteMyAccount(token);
+
+      sessionStorage.removeItem("access_token");
+      nav("/login");
+    } catch (error) {
+      console.error("Failed to delete account", error);
+      alert("Failed to delete account. Please try again.");
+    }
+  }
+
   const messages = activeChatId ? (messagesMap[activeChatId] || [WELCOME_MESSAGE]) : [WELCOME_MESSAGE];
   const activeSession = sessions.find((s) => s.id === activeChatId);
   const { darkMode } = useContext(DarkModeContext);
@@ -345,6 +358,7 @@ export default function AppHome() {
           user={user}
           onClose={() => setShowSettings(false)}
           onLogout={onLogout}
+          onDelete={handleDeleteAccount}
           onRestoreChat={handleRestoreChat}
           changeName={handleChangeName}
         />
