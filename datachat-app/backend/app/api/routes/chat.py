@@ -63,6 +63,8 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             )
 
             message_count = len(messages)
+            generated_title = None  
+            generated_summary = None  
             if message_count <= 4 or message_count % 6 == 0:
                 metadata = generate_chat_summary_and_title(messages)
                 generated_title = metadata.get("title")
