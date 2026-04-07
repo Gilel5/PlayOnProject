@@ -134,6 +134,29 @@ def _friendly_error(e: Exception) -> str:
     return "Upload failed due to a database error. Please verify your data and try again."
 
 
+@router.get("/files")
+def list_uploaded_files(user=Depends(_require_auth), db: Session = Depends(get_db)):
+    """Return distinct CSV files uploaded by the current user, newest first."""
+    uploads = (
+        db.query(FileUpload)
+        .filter_by(user_id=user["sub"])
+        .order_by(FileUpload.uploaded_at.desc())
+        .all()
+    )
+    seen = set()
+    result = []
+    for u in uploads:
+        if u.filename in seen:
+            continue
+        seen.add(u.filename)
+        result.append({
+            "filename": u.filename,
+            "file_size": float(u.file_size),
+            "uploaded_at": u.uploaded_at.isoformat(),
+        })
+    return result
+
+
 @router.get("/status/{job_id}")
 def get_upload_status(job_id: str, user=Depends(_require_auth)):
     """Return current progress for an upload job. Polled by the client during upload."""
