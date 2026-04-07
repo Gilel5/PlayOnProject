@@ -73,6 +73,9 @@ Rules:
   aggregating (SUM, AVG, etc.), exclude NaN rows by adding a WHERE or CASE
   filter, e.g.: SUM(CASE WHEN base_amount = base_amount THEN base_amount ELSE 0 END)
   (NaN != NaN in IEEE 754, so base_amount = base_amount is false for NaN rows).
+- Always aggregate, group, or filter results so the output is concise (ideally under 50 rows).
+- Never use SELECT * — always select only the columns relevant to the question.
+- If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
 """
 
 _ANSWER_SYSTEM_PROMPT = """\
@@ -149,7 +152,7 @@ def get_data_chat_response(message: str) -> str:
                     "content": (
                         f"User question: {message}\n\n"
                         f"SQL used:\n{sql}\n\n"
-                        f"Results ({len(rows)} rows):\n{json.dumps(rows[:200], default=str)}"
+                        f"Results ({len(rows)} rows):\n{json.dumps(rows[:200], default=str, ensure_ascii=True)}"
                     ),
                 },
             ],
