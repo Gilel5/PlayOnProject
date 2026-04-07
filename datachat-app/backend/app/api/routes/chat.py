@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timezone
 from app.services.chat_summary_services import generate_chat_summary_and_title
-from app.services.openai_services import get_data_chat_response
+from app.services.openai_services import get_data_chat_response, TABLE
 from app.services.summary_report_services import generate_summary_reports
 from app.db.session import get_db
 from app.models.chat_session import ChatSession
@@ -25,6 +25,12 @@ _executor = ThreadPoolExecutor(max_workers=4)
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[uuid.UUID] = None
+
+
+@router.get("/datasource")
+def get_datasource():
+    """Return the name of the database table being queried."""
+    return {"table": TABLE}
 
 
 # Data-aware chat endpoint

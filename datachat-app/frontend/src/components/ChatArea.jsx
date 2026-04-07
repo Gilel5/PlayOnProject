@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect, useContext } from "react";
 import { DarkModeContext } from "./DarkModeContext";
-import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp, BarChart3 } from "lucide-react";
+import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp, BarChart3, Database, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { generateSummaryReports } from "../api/chat";
+import { getUploadedFiles } from "../api/upload";
 import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
 import PdfAttachment from "./PdfAttachment";
@@ -51,6 +52,7 @@ export default function ChatArea({
   uploadStatus, // null | {phase: 'uploading', percent, loaded, total, startedAt} | {phase: 'processing'} | {rows_inserted, table} | {error}
   onCancelUpload,
   onClearChat,
+  datasource,
 }) {
   const messagesEndRef = useRef(null);
   const renameInputRef = useRef(null);
@@ -65,7 +67,10 @@ export default function ChatArea({
   const [renameValue, setRenameValue] = useState("");
   const [isGeneratingReports, setIsGeneratingReports] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-
+  const [dsDropdownOpen, setDsDropdownOpen] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState(null);
+  const dsDropdownRef = useRef(null);
+  
   async function handleGenerateReports() {
     try {
       setIsGeneratingReports(true);
@@ -218,6 +223,42 @@ export default function ChatArea({
     setOpenMenu(chatId);
   }
 
+  // Invalidate cached file list after a successful upload
+  useEffect(() => {
+    if (uploadStatus?.rows_inserted != null) {
+      setUploadedFiles(null);
+    }
+  }, [uploadStatus]);
+
+  // Close datasource dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dsDropdownRef.current && !dsDropdownRef.current.contains(event.target)) {
+        setDsDropdownOpen(false);
+      }
+    };
+    if (dsDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dsDropdownOpen]);
+
+  async function handleDsDropdownToggle() {
+    if (dsDropdownOpen) {
+      setDsDropdownOpen(false);
+      return;
+    }
+    setDsDropdownOpen(true);
+    if (uploadedFiles === null) {
+      try {
+        const files = await getUploadedFiles();
+        setUploadedFiles(files);
+      } catch {
+        setUploadedFiles([]);
+      }
+    }
+  }
+
   function handlePaperclipClick() {
     fileInputRef.current?.click();
   }
@@ -261,6 +302,46 @@ export default function ChatArea({
         </div>
         {/*  Right side of top bar */}
         <div className="flex items-center gap-2">
+          {datasource && (
+            <div className="relative" ref={dsDropdownRef}>
+              <button
+                onClick={handleDsDropdownToggle}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${darkMode ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+              >
+                <Database size={12} />
+                <span>{datasource}</span>
+                <ChevronDown size={12} className={`transition-transform ${dsDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              {dsDropdownOpen && (
+                <div className={`absolute right-0 top-full mt-1 w-72 rounded-lg shadow-lg z-50 border overflow-hidden ${darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-gray-200"}`}>
+                  <div className={`px-3 py-2 text-xs font-medium border-b ${darkMode ? "border-slate-700 text-slate-400" : "border-gray-100 text-gray-400"}`}>
+                    Uploaded Files
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {uploadedFiles === null ? (
+                      <div className={`px-3 py-4 text-xs text-center ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+                        Loading...
+                      </div>
+                    ) : uploadedFiles.length === 0 ? (
+                      <div className={`px-3 py-4 text-xs text-center ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+                        No files uploaded yet.
+                      </div>
+                    ) : (
+                      uploadedFiles.map((f, i) => (
+                        <div key={i} className={`px-3 py-2 text-xs ${darkMode ? "hover:bg-slate-800 border-slate-800" : "hover:bg-gray-50 border-gray-50"} ${i > 0 ? "border-t" : ""}`}>
+                          <div className={`font-medium truncate ${darkMode ? "text-slate-200" : "text-gray-700"}`}>{f.filename}</div>
+                          <div className={`mt-0.5 flex gap-3 ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+                            <span>{f.file_size < 1 ? `${(f.file_size * 1024).toFixed(0)} KB` : `${f.file_size.toFixed(1)} MB`}</span>
+                            <span>{new Date(f.uploaded_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
             onClick={(e) => handleMenuOpen(e, "current-chat")}
           >
