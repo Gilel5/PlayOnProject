@@ -14,6 +14,15 @@ uploadApi.interceptors.request.use((config) => {
 });
 
 /**
+ * Fetch the list of CSV files the current user has uploaded.
+ * @returns {Promise<Array<{ filename: string, rows_inserted: number, file_size: number, uploaded_at: string }>>}
+ */
+export async function getUploadedFiles() {
+  const { data } = await uploadApi.get("/upload/files");
+  return data;
+}
+
+/**
  * Upload a CSV File object to the backend.
  * @param {File} file
  * @param {function} onProgress  — called with (percent: 0-100, loaded: bytes, total: bytes) for the upload phase
