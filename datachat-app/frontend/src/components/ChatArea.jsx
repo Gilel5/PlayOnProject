@@ -8,6 +8,17 @@ import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
 import PdfAttachment from "./PdfAttachment";
 import File from "./File";
+import remarkGfm from "remark-gfm";
+
+function formatFlattenedTable(text) {
+  if (!text) return text;
+  // Dynamic intercept: if the generated string has markdown pipes squashed (no physical \n detected)
+  if (text.includes('|---|') && !text.includes('\n|')) {
+    // Regex inject physical layout breaks bridging all valid trailing/leading pipes
+    return text.replace(/\|\s+(?=\|)/g, '|\n');
+  }
+  return text;
+}
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -79,7 +90,7 @@ export default function ChatArea({
   }
   function handleExportChat() {
     if (!messages || messages.length === 0) return;
-    
+
     const exportText = messages.map(msg => {
       const role = msg.role === 'user' ? 'You' : 'DataChat';
       return `${role}:\n${msg.text}\n`;
@@ -89,37 +100,37 @@ export default function ChatArea({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    
+
     const safeTitle = (activeChatTitle || "Chat_Export").replace(/[^a-z0-9]/gi, '_');
     a.download = `${safeTitle}_${new Date().toISOString().split('T')[0]}.txt`;
-    
+
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     setOpenMenu(null);
   }
 
   async function handleExportPdf() {
     setOpenMenu(null);
     if (!messages || messages.length === 0) return;
-    
+
     const originalContainer = document.getElementById("chat-messages-container");
     if (!originalContainer) return;
-    
+
     const clone = originalContainer.cloneNode(true);
-    
+
     let stylesheets = '';
     for (let i = 0; i < document.styleSheets.length; i++) {
-        const styleSheet = document.styleSheets[i];
-        try {
-          if (styleSheet.href) {
-            stylesheets += `<link rel="stylesheet" href="${styleSheet.href}">\n`;
-          } else if (styleSheet.cssRules) {
-            stylesheets += `<style>${Array.from(styleSheet.cssRules).map(r => r.cssText).join('')}</style>\n`;
-          }
-        } catch(e) {}
+      const styleSheet = document.styleSheets[i];
+      try {
+        if (styleSheet.href) {
+          stylesheets += `<link rel="stylesheet" href="${styleSheet.href}">\n`;
+        } else if (styleSheet.cssRules) {
+          stylesheets += `<style>${Array.from(styleSheet.cssRules).map(r => r.cssText).join('')}</style>\n`;
+        }
+      } catch (e) { }
     }
 
     const htmlContent = `
@@ -137,11 +148,11 @@ export default function ChatArea({
                 color: #111827 !important; 
                 box-shadow: none !important;
              }
-             .bg-sky-700, 
              .bg-slate-700, 
              .bg-slate-800, 
              .bg-slate-900, 
              .bg-black,
+             .bg-indigo-500,
              .bg-\\[\\#5BC5D0\\] {
                 background-color: #f3f4f6 !important;
                 border: 1px solid #e5e7eb !important;
@@ -161,7 +172,7 @@ export default function ChatArea({
         </body>
       </html>
     `;
-    
+
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
@@ -354,7 +365,9 @@ export default function ChatArea({
             <UserMessage key={msg.id} text={msg.text} />
           ) : (
             <BotMessage key={msg.id}>
-              <div className={`prose prose-sm max-w-none transition-colors ${darkMode ? "prose-invert prose-headings:text-white prose-p:text-slate-100 prose-strong:text-white prose-li:text-slate-100" : "prose-headings:text-gray-900 prose-p:text-gray-800 prose-strong:text-gray-900 prose-li:text-gray-800"}`}><ReactMarkdown>{msg.text}</ReactMarkdown></div>
+              <div className={`prose prose-sm max-w-none transition-colors prose-table:w-full prose-td:border prose-td:border-gray-300 prose-th:border prose-th:border-gray-300 prose-td:px-2 prose-td:py-1 prose-th:px-2 prose-th:py-1 ${darkMode ? "prose-invert prose-headings:text-white prose-p:text-slate-100 prose-strong:text-white prose-li:text-slate-100" : "prose-headings:text-gray-900 prose-p:text-gray-800 prose-strong:text-gray-900 prose-li:text-gray-800"}`}>
+  <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatFlattenedTable(msg.text)}</ReactMarkdown>
+</div>
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
           )
@@ -410,10 +423,10 @@ export default function ChatArea({
           const percent = total_rows > 0 ? Math.min(100, Math.round((rows_processed * 100) / total_rows)) : 0;
           const phaseLabel =
             serverPhase === "queued" ? "Queued (waiting for a DB slot)…" :
-            serverPhase === "validating" ? "Validating columns…" :
-            serverPhase === "finalizing" ? "Finalizing insert…" :
-            serverPhase === "inserting" ? "Inserting rows…" :
-            "Processing…";
+              serverPhase === "validating" ? "Validating columns…" :
+                serverPhase === "finalizing" ? "Finalizing insert…" :
+                  serverPhase === "inserting" ? "Inserting rows…" :
+                    "Processing…";
           const elapsed = startedAt ? (Date.now() - startedAt) / 1000 : 0;
           const rps = elapsed > 0.5 && rows_processed > 0 ? rows_processed / elapsed : 0;
           const eta = rps > 0 && total_rows > rows_processed ? (total_rows - rows_processed) / rps : null;
@@ -506,15 +519,14 @@ export default function ChatArea({
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || isLoading}
-              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                input.trim() && !isLoading
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${input.trim() && !isLoading
                   ? darkMode
-                    ? "bg-sky-700 text-white hover:bg-sky-800"
+                    ? "bg-indigo-500 text-white hover:bg-indigo-600"
                     : "bg-[#5BC5D0] text-black hover:bg-[#5BC5D0]"
                   : darkMode
                     ? "bg-slate-700 text-white cursor-not-allowed"
                     : "bg-gray-200 text-gray-700 cursor-not-allowed"
-              }`}
+                }`}
             >
               <ArrowUp size={14} />
             </button>
