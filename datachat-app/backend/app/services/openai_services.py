@@ -73,15 +73,23 @@ Rules:
   aggregating (SUM, AVG, etc.), exclude NaN rows by adding a WHERE or CASE
   filter, e.g.: SUM(CASE WHEN base_amount = base_amount THEN base_amount ELSE 0 END)
   (NaN != NaN in IEEE 754, so base_amount = base_amount is false for NaN rows).
+- Always aggregate, group, or filter results so the output is concise (ideally under 50 rows).
+- Never use SELECT * — always select only the columns relevant to the question.
+- If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
 """
 
 _ANSWER_SYSTEM_PROMPT = """\
 You are a helpful financial data analyst. The user asked a question about their
 financial data. Below are the SQL query results. Provide a clear, concise answer
-in English. Format monetary values with $ and commas. Use markdown for any tables
-if appropriate.
-"""
+in English. Format monetary values with $ and commas.
 
+Rules:
+- Do NOT reprint the raw JSON data.
+- Do NOT show the SQL query in your response.
+- If the results are tabular, format them as a clean markdown table.
+- Lead with a 1-2 sentence summary before any table.
+- After the table, add a short interpretation or key takeaways.
+"""
 
 def _extract_sql(raw: str) -> str:
     """Strip optional markdown fencing from GPT output."""
@@ -105,45 +113,52 @@ def get_data_chat_response(message: str) -> str:
       2. Execute the SQL read-only against the finance DB.
       3. GPT summarises the results in plain English.
     """
-    schema = get_table_schema()
+    try:
+        schema = get_table_schema()
+        logger.info("Schema fetched OK")
 
-    # Step 1 — ask GPT to write SQL
-    sql_resp = client.chat.completions.create(
-        model="gpt-5.4",
-        temperature=0,
-        messages=[
-            {"role": "system", "content": _SQL_SYSTEM_PROMPT.format(table=TABLE)},
-            {"role": "user", "content": f"Schema:\n{schema}\n\nQuestion: {message}"},
-        ],
-    )
-    raw_sql = sql_resp.choices[0].message.content
-    sql = _extract_sql(raw_sql)
-    _validate_sql(sql)
-    logger.info("Generated SQL: %s", sql)
+        # Step 1 — ask GPT to write SQL
+        sql_resp = client.chat.completions.create(
+            model="gpt-5.4",
+            temperature=0,
+            messages=[
+                {"role": "system", "content": _SQL_SYSTEM_PROMPT.format(table=TABLE)},
+                {"role": "user", "content": f"Schema:\n{schema}\n\nQuestion: {message}"},
+            ],
+        )
+        raw_sql = sql_resp.choices[0].message.content
+        sql = _extract_sql(raw_sql)
+        _validate_sql(sql)
+        logger.info("Generated SQL: %s", sql)
 
-    # Step 2 — execute the query
-    with finance_engine.connect() as conn:
-        result = conn.execute(text(sql))
-        columns = list(result.keys())
-        rows = [
-            {k: (0 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v)
-             for k, v in zip(columns, row)}
-            for row in result.fetchall()
-        ]
+        # Step 2 — execute the query
+        with finance_engine.connect() as conn:
+            result = conn.execute(text(sql))
+            columns = list(result.keys())
+            rows = [
+                {k: (0 if isinstance(v, float) and (math.isnan(v) or math.isinf(v)) else v)
+                 for k, v in zip(columns, row)}
+                for row in result.fetchall()
+            ]
+        logger.info("Query returned %d rows", len(rows))
 
-    # Step 3 — ask GPT to answer in English
-    answer_resp = client.chat.completions.create(
-        model="gpt-5.4",
-        messages=[
-            {"role": "system", "content": _ANSWER_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": (
-                    f"User question: {message}\n\n"
-                    f"SQL used:\n{sql}\n\n"
-                    f"Results ({len(rows)} rows):\n{json.dumps(rows[:200], default=str)}"
-                ),
-            },
-        ],
-    )
-    return answer_resp.choices[0].message.content
+        # Step 3 — ask GPT to answer in English
+        answer_resp = client.chat.completions.create(
+            model="gpt-5.4",
+            messages=[
+                {"role": "system", "content": _ANSWER_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"User question: {message}\n\n"
+                        f"SQL used:\n{sql}\n\n"
+                        f"Results ({len(rows)} rows):\n{json.dumps(rows[:200], default=str, ensure_ascii=True)}"
+                    ),
+                },
+            ],
+        )
+        return answer_resp.choices[0].message.content
+
+    except Exception as e:
+        logger.exception("get_data_chat_response failed: %s", e)
+        raise

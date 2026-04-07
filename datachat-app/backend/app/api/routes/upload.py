@@ -2,9 +2,10 @@ import asyncio
 import io
 import logging
 import re
+import time
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -18,8 +19,10 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 bearer = HTTPBearer()
 logger = logging.getLogger(__name__)
 
+# Maximum accepted upload size in bytes (1 GB).
+MAX_UPLOAD_SIZE_BYTES = 1024 * 1024 * 1024
+
 # How many rows are processed at a time during the CSV read/clean phase.
-# This keeps memory usage flat regardless of file size.
 CHUNK_SIZE = 100_000
 
 # Maximum number of uploads allowed to write to Supabase at the same time.
@@ -28,6 +31,30 @@ MAX_CONCURRENT = 3
 
 # Semaphore that enforces the MAX_CONCURRENT limit across all incoming requests.
 _upload_semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+
+# In-memory progress store keyed by job_id. Note: only works for a single worker.
+# Each entry: {"phase": str, "rows_processed": int, "total_rows": int, "updated_at": float}
+_upload_progress: dict[str, dict] = {}
+# How long to keep a finished/abandoned progress entry around before purging.
+_PROGRESS_TTL_SECONDS = 3600
+
+
+#Updates progress for job
+def _set_progress(job_id: str | None, update: dict) -> None:
+    """Record progress for a job. No-op if job_id is missing."""
+    if not job_id:
+        return
+    entry = _upload_progress.setdefault(job_id, {})
+    entry.update(update)
+    entry["updated_at"] = time.time()
+
+# removed entries older than a hour
+def _purge_stale_progress() -> None:
+    """Remove entries older than _PROGRESS_TTL_SECONDS so the dict doesn't grow forever."""
+    cutoff = time.time() - _PROGRESS_TTL_SECONDS
+    stale = [k for k, v in _upload_progress.items() if v.get("updated_at", 0) < cutoff]
+    for k in stale:
+        _upload_progress.pop(k, None)
 
 
 def _require_auth(creds: HTTPAuthorizationCredentials = Depends(bearer)):
@@ -70,11 +97,11 @@ def _get_table_columns(table_name: str) -> set[str]:
 def _normalize_col(c: str) -> str:
     """
     Standardize a column name so it matches the Supabase table schema:
-      - Lowercase and strip whitespace
-      - Spaces → underscores        (e.g. 'transaction date'  → 'transaction_date')
-      - % → pct                     (e.g. 'revenue share %'   → 'revenue_share_pct')
-      - $ → usd                     (e.g. 'revenue share $'   → 'revenue_share_usd')
-      - Hyphens → underscores       (e.g. 'sub-type'          → 'sub_type')
+       Lowercase and strip whitespace
+       Spaces → underscores        (e.g. 'transaction date'  → 'transaction_date')
+      % → pct                     (e.g. 'revenue share %'   → 'revenue_share_pct')
+       $ → usd                     (e.g. 'revenue share $'   → 'revenue_share_usd')
+      Hyphens → underscores       (e.g. 'sub-type'          → 'sub_type')
     """
     return (
         c.lower().strip()
@@ -86,10 +113,7 @@ def _normalize_col(c: str) -> str:
 
 
 def _friendly_error(e: Exception) -> str:
-    """
-    Parse a psycopg2 database error and return a user-friendly message.
-    The full technical error is logged separately on the server.
-    """
+  
     msg = str(e)
 
     # NOT NULL violation — e.g. null value in column "processor_transaction_id"
@@ -110,16 +134,49 @@ def _friendly_error(e: Exception) -> str:
     return "Upload failed due to a database error. Please verify your data and try again."
 
 
+@router.get("/status/{job_id}")
+def get_upload_status(job_id: str, user=Depends(_require_auth)):
+    """Return current progress for an upload job. Polled by the client during upload."""
+    entry = _upload_progress.get(job_id)
+    if not entry:
+        return {"phase": "unknown"}
+    # Don't leak internal fields
+    return {k: v for k, v in entry.items() if k != "updated_at"}
+
+
 @router.post("/csv")
 async def upload_csv(
     request: Request,
     file: UploadFile = File(...),
+    x_upload_job_id: str | None = Header(None),
     user=Depends(_require_auth),
     db: Session = Depends(get_db),
 ):
+    job_id = x_upload_job_id
+    _purge_stale_progress()
+    _set_progress(job_id, {"phase": "receiving", "rows_processed": 0, "total_rows": 0})
+
     # Step 1 — Reject anything that isn't a CSV before doing any work.
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are accepted.")
+
+    # Reject files larger than the configured limit early (via Content-Length header)
+    # before we spend time reading the body into memory.
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > MAX_UPLOAD_SIZE_BYTES:
+        _set_progress(job_id, {"phase": "error"})
+        raise HTTPException(status_code=413, detail="File is too large. Maximum size is 1 GB.")
+
+    # Check if this file has already been uploaded by this user.
+    existing = db.query(FileUpload).filter_by(
+        user_id=user["sub"], filename=file.filename
+    ).first()
+    if existing:
+        _set_progress(job_id, {"phase": "done"})
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{file.filename}' has already been uploaded.",
+        )
 
     table_name = settings.FINANCE_TABLE_NAME
 
@@ -127,7 +184,18 @@ async def upload_csv(
     # This avoids writing to disk on the backend server, which reduces disk I/O
     # and speeds up concurrent uploads significantly.
     contents = await file.read()
+
+    # Double-check size in case the Content-Length header was missing or inaccurate.
+    if len(contents) > MAX_UPLOAD_SIZE_BYTES:
+        _set_progress(job_id, {"phase": "error"})
+        raise HTTPException(status_code=413, detail="File is too large. Maximum size is 1 GB.")
+
     buf = io.BytesIO(contents)
+
+    # Count total data rows by counting newlines (fast, even for 300MB files).
+    # Subtract 1 for the header
+    total_rows = max(0, contents.count(b"\n") - 1)
+    _set_progress(job_id, {"phase": "validating", "total_rows": total_rows})
 
     # Step 3 — Read only the header row to get the column names.
     # We normalize them and compare against the Supabase table columns.
@@ -137,6 +205,7 @@ async def upload_csv(
     table_columns = _get_table_columns(table_name)
     unknown = csv_columns - table_columns
     if unknown:
+        _set_progress(job_id, {"phase": "error"})
         raise HTTPException(
             status_code=422,
             detail=f"CSV contains columns not found in table '{table_name}': {sorted(unknown)}. Upload rejected.",
@@ -145,12 +214,15 @@ async def upload_csv(
     # Step 4 — Acquire the semaphore before writing to Supabase.
     # If MAX_CONCURRENT uploads are already running, this request waits here
     # until a slot opens up, preventing database disk I/O from being overloaded.
+    _set_progress(job_id, {"phase": "queued"})
     async with _upload_semaphore:
 
         # If the user cancelled while waiting for the semaphore, bail out early.
         if await request.is_disconnected():
+            _set_progress(job_id, {"phase": "cancelled"})
             return {"rows_inserted": 0, "table": table_name, "cancelled": True}
 
+        _set_progress(job_id, {"phase": "inserting", "rows_processed": 0, "total_rows": total_rows})
         buf.seek(0)
         rows_inserted = 0
         cols = None
@@ -170,6 +242,7 @@ async def upload_csv(
 
                     # Stop processing if the client disconnected mid-upload.
                     if await request.is_disconnected():
+                        _set_progress(job_id, {"phase": "cancelled"})
                         break
 
                     # Normalize column names to match the table schema.
@@ -177,6 +250,9 @@ async def upload_csv(
 
                     # Drop completely blank rows (empty lines in the CSV).
                     chunk = chunk.dropna(how="all")
+
+                    # Drop exact duplicate rows within the chunk.
+                    chunk = chunk.drop_duplicates()
 
                     # Strip any leading $ from currency columns so they can be
                     # stored as numeric without causing a type error.
@@ -215,15 +291,28 @@ async def upload_csv(
                         csv_buf,
                     )
                     rows_inserted += len(chunk)
+                    _set_progress(job_id, {
+                        "phase": "inserting",
+                        "rows_processed": rows_inserted,
+                        "total_rows": total_rows,
+                    })
 
                 # Step 7 — Move all staged rows into the main table in one statement.
                 # ON CONFLICT DO NOTHING silently skips any duplicate rows.
                 if cols:
+                    _set_progress(job_id, {
+                        "phase": "finalizing",
+                        "rows_processed": rows_inserted,
+                        "total_rows": total_rows,
+                    })
                     cursor.execute(f"""
                         INSERT INTO {table_name} ({cols})
                         SELECT {cols} FROM staging
                         ON CONFLICT DO NOTHING
                     """)
+                    rows_written = cursor.rowcount
+                else:
+                    rows_written = 0
 
             # Commit the transaction — this is the only commit in the entire upload.
             raw_conn.commit()
@@ -231,6 +320,7 @@ async def upload_csv(
         except Exception as e:
             # Roll back everything if any step fails.
             raw_conn.rollback()
+            _set_progress(job_id, {"phase": "error"})
             logger.error("CSV Upload error: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail=_friendly_error(e))
         finally:
@@ -241,9 +331,21 @@ async def upload_csv(
     db.add(FileUpload(
         user_id=user["sub"],
         filename=file.filename,
-        rows_inserted=rows_inserted,
+        rows_inserted=rows_written,
         file_size=round(len(contents) / (1024 * 1024), 2),
     ))
     db.commit()
 
-    return {"rows_inserted": rows_inserted, "table": table_name}
+    _set_progress(job_id, {
+        "phase": "done",
+        "rows_processed": rows_written,
+        "total_rows": total_rows,
+    })
+
+    response = {"rows_inserted": rows_written, "table": table_name}
+    if rows_written == 0:
+        response["message"] = "All data in this file is already present in the database."
+    elif rows_written < rows_inserted:
+        skipped = rows_inserted - rows_written
+        response["message"] = f"{skipped:,} duplicate rows were skipped."
+    return response

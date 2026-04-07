@@ -7,6 +7,32 @@ import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
 import PdfAttachment from "./PdfAttachment";
 import File from "./File";
+import remarkGfm from "remark-gfm";
+
+function formatFlattenedTable(text) {
+  if (!text) return text;
+  // Dynamic intercept: if the generated string has markdown pipes squashed (no physical \n detected)
+  if (text.includes('|---|') && !text.includes('\n|')) {
+    // Regex inject physical layout breaks bridging all valid trailing/leading pipes
+    return text.replace(/\|\s+(?=\|)/g, '|\n');
+  }
+  return text;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatTime(seconds) {
+  if (!isFinite(seconds) || seconds < 0) return "—";
+  if (seconds < 60) return `${Math.ceil(seconds)}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.ceil(seconds % 60);
+  return `${mins}m ${secs}s`;
+}
 
 export default function ChatArea({
   messages,
@@ -22,7 +48,7 @@ export default function ChatArea({
   rightPanelOpen,
   onRightPanelToggle,
   onUploadCsv,
-  uploadStatus, // null | 'uploading' | {rows_inserted, table} | {error}
+  uploadStatus, // null | {phase: 'uploading', percent, loaded, total, startedAt} | {phase: 'processing'} | {rows_inserted, table} | {error}
   onCancelUpload,
   onClearChat,
 }) {
@@ -39,7 +65,7 @@ export default function ChatArea({
   const [renameValue, setRenameValue] = useState("");
   const [isGeneratingReports, setIsGeneratingReports] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  
+
   async function handleGenerateReports() {
     try {
       setIsGeneratingReports(true);
@@ -59,7 +85,7 @@ export default function ChatArea({
   }
   function handleExportChat() {
     if (!messages || messages.length === 0) return;
-    
+
     const exportText = messages.map(msg => {
       const role = msg.role === 'user' ? 'You' : 'DataChat';
       return `${role}:\n${msg.text}\n`;
@@ -69,37 +95,37 @@ export default function ChatArea({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    
+
     const safeTitle = (activeChatTitle || "Chat_Export").replace(/[^a-z0-9]/gi, '_');
     a.download = `${safeTitle}_${new Date().toISOString().split('T')[0]}.txt`;
-    
+
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     setOpenMenu(null);
   }
 
   async function handleExportPdf() {
     setOpenMenu(null);
     if (!messages || messages.length === 0) return;
-    
+
     const originalContainer = document.getElementById("chat-messages-container");
     if (!originalContainer) return;
-    
+
     const clone = originalContainer.cloneNode(true);
-    
+
     let stylesheets = '';
     for (let i = 0; i < document.styleSheets.length; i++) {
-        const styleSheet = document.styleSheets[i];
-        try {
-          if (styleSheet.href) {
-            stylesheets += `<link rel="stylesheet" href="${styleSheet.href}">\n`;
-          } else if (styleSheet.cssRules) {
-            stylesheets += `<style>${Array.from(styleSheet.cssRules).map(r => r.cssText).join('')}</style>\n`;
-          }
-        } catch(e) {}
+      const styleSheet = document.styleSheets[i];
+      try {
+        if (styleSheet.href) {
+          stylesheets += `<link rel="stylesheet" href="${styleSheet.href}">\n`;
+        } else if (styleSheet.cssRules) {
+          stylesheets += `<style>${Array.from(styleSheet.cssRules).map(r => r.cssText).join('')}</style>\n`;
+        }
+      } catch (e) { }
     }
 
     const htmlContent = `
@@ -117,11 +143,11 @@ export default function ChatArea({
                 color: #111827 !important; 
                 box-shadow: none !important;
              }
-             .bg-sky-700, 
              .bg-slate-700, 
              .bg-slate-800, 
              .bg-slate-900, 
              .bg-black,
+             .bg-indigo-500,
              .bg-\\[\\#5BC5D0\\] {
                 background-color: #f3f4f6 !important;
                 border: 1px solid #e5e7eb !important;
@@ -141,7 +167,7 @@ export default function ChatArea({
         </body>
       </html>
     `;
-    
+
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
@@ -258,7 +284,9 @@ export default function ChatArea({
             <UserMessage key={msg.id} text={msg.text} />
           ) : (
             <BotMessage key={msg.id}>
-              <div className={`prose prose-sm max-w-none transition-colors ${darkMode ? "prose-invert prose-headings:text-white prose-p:text-slate-100 prose-strong:text-white prose-li:text-slate-100" : "prose-headings:text-gray-900 prose-p:text-gray-800 prose-strong:text-gray-900 prose-li:text-gray-800"}`}><ReactMarkdown>{msg.text}</ReactMarkdown></div>
+              <div className={`prose prose-sm max-w-none transition-colors prose-table:w-full prose-td:border prose-td:border-gray-300 prose-th:border prose-th:border-gray-300 prose-td:px-2 prose-td:py-1 prose-th:px-2 prose-th:py-1 ${darkMode ? "prose-invert prose-headings:text-white prose-p:text-slate-100 prose-strong:text-white prose-li:text-slate-100" : "prose-headings:text-gray-900 prose-p:text-gray-800 prose-strong:text-gray-900 prose-li:text-gray-800"}`}>
+  <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatFlattenedTable(msg.text)}</ReactMarkdown>
+</div>
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
           )
@@ -277,21 +305,82 @@ export default function ChatArea({
       {/* Input area */}
       <div className="px-6 pb-6 pt-2">
         {/* Upload status banners */}
-        {uploadStatus === "uploading" && (
-          <div className={`flex items-center gap-2 mb-2 px-1 text-xs ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
-            <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
-            <span>Uploading CSV…</span>
-            <button
-              onClick={onCancelUpload}
-              className="ml-1 text-red-400 hover:text-red-600 underline"
-            >
-              Cancel
-            </button>
+        {uploadStatus?.phase === "uploading" && (
+          <div className={`mb-2 px-1 text-xs ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
+              <span>Uploading CSV… {uploadStatus.percent}%</span>
+              <span className={darkMode ? "text-slate-400" : "text-gray-400"}>
+                ({formatBytes(uploadStatus.loaded)} / {formatBytes(uploadStatus.total)}
+                {(() => {
+                  const elapsed = (Date.now() - uploadStatus.startedAt) / 1000;
+                  if (elapsed < 0.5 || uploadStatus.loaded === 0) return "";
+                  const bps = uploadStatus.loaded / elapsed;
+                  const remainingBytes = uploadStatus.total - uploadStatus.loaded;
+                  const eta = remainingBytes / bps;
+                  return ` • ${formatBytes(bps)}/s • ${formatTime(eta)} left`;
+                })()}
+                )
+              </span>
+              <button
+                onClick={onCancelUpload}
+                className="ml-1 text-red-400 hover:text-red-600 underline"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className={`mt-1 h-1 rounded-full overflow-hidden ${darkMode ? "bg-slate-800" : "bg-gray-200"}`}>
+              <div
+                className="h-full bg-[#5BC5D0] transition-all duration-200"
+                style={{ width: `${uploadStatus.percent}%` }}
+              />
+            </div>
           </div>
         )}
+        {uploadStatus?.phase === "processing" && (() => {
+          const { rows_processed = 0, total_rows = 0, serverPhase, startedAt } = uploadStatus;
+          const percent = total_rows > 0 ? Math.min(100, Math.round((rows_processed * 100) / total_rows)) : 0;
+          const phaseLabel =
+            serverPhase === "queued" ? "Queued (waiting for a DB slot)…" :
+              serverPhase === "validating" ? "Validating columns…" :
+                serverPhase === "finalizing" ? "Finalizing insert…" :
+                  serverPhase === "inserting" ? "Inserting rows…" :
+                    "Processing…";
+          const elapsed = startedAt ? (Date.now() - startedAt) / 1000 : 0;
+          const rps = elapsed > 0.5 && rows_processed > 0 ? rows_processed / elapsed : 0;
+          const eta = rps > 0 && total_rows > rows_processed ? (total_rows - rows_processed) / rps : null;
+          return (
+            <div className={`mb-2 px-1 text-xs ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
+                <span>{phaseLabel} {total_rows > 0 && `${percent}%`}</span>
+                {total_rows > 0 && (
+                  <span className={darkMode ? "text-slate-400" : "text-gray-400"}>
+                    ({rows_processed.toLocaleString()} / {total_rows.toLocaleString()} rows
+                    {eta !== null && ` • ${formatTime(eta)} left`}
+                    )
+                  </span>
+                )}
+              </div>
+              {total_rows > 0 && (
+                <div className={`mt-1 h-1 rounded-full overflow-hidden ${darkMode ? "bg-slate-800" : "bg-gray-200"}`}>
+                  <div
+                    className="h-full bg-[#5BC5D0] transition-all duration-200"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {uploadStatus?.rows_inserted != null && (
-          <div className="mb-2 px-1 text-xs text-green-600">
-            ✓ {uploadStatus.rows_inserted.toLocaleString()} rows added to <strong>{uploadStatus.table}</strong>
+          <div className={`mb-2 px-1 text-xs ${uploadStatus.rows_inserted === 0 ? (darkMode ? "text-yellow-400" : "text-yellow-600") : "text-green-600"}`}>
+            {uploadStatus.rows_inserted === 0
+              ? uploadStatus.message || "No new rows were added."
+              : <>✓ {uploadStatus.rows_inserted.toLocaleString()} rows added to <strong>{uploadStatus.table}</strong>
+                {uploadStatus.message && <span className={darkMode ? " text-yellow-400" : " text-yellow-600"}> ({uploadStatus.message})</span>}
+              </>
+            }
           </div>
         )}
         {uploadStatus?.error && (
@@ -326,7 +415,7 @@ export default function ChatArea({
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handlePaperclipClick}
-                disabled={uploadStatus === "uploading"}
+                disabled={uploadStatus?.phase === "uploading" || uploadStatus?.phase === "processing"}
                 className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${darkMode ? "hover:bg-slate-800 text-slate-300 hover:text-slate-100" : "hover:bg-gray-100 text-gray-700 hover:text-gray-600"}`}
                 title="Upload CSV"
               >
@@ -349,15 +438,14 @@ export default function ChatArea({
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || isLoading}
-              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                input.trim() && !isLoading
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${input.trim() && !isLoading
                   ? darkMode
-                    ? "bg-sky-700 text-white hover:bg-sky-800"
+                    ? "bg-indigo-500 text-white hover:bg-indigo-600"
                     : "bg-[#5BC5D0] text-black hover:bg-[#5BC5D0]"
                   : darkMode
                     ? "bg-slate-700 text-white cursor-not-allowed"
                     : "bg-gray-200 text-gray-700 cursor-not-allowed"
-              }`}
+                }`}
             >
               <ArrowUp size={14} />
             </button>

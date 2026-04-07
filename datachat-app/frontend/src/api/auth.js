@@ -92,6 +92,19 @@ export async function updateDisplayName(accessToken, displayName) {
     }
 }
 
+export async function changePassword(accessToken, currentPassword, newPassword) {
+    try {
+        const res = await api.post(
+            "/auth/me/password",
+            { current_password: currentPassword, new_password: newPassword },
+            { headers: { Authorization: "Bearer " + accessToken } }
+        );
+        return res.data;
+    } catch (err) {
+        throw new Error(getAxiosErrorMessage(err));
+    }
+}
+
 export async function deleteMyAccount(accessToken) {
   const res = await fetch("http://localhost:8000/auth/me", {
     method: "DELETE",
