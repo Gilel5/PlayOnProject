@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { DarkModeContext } from "../components/DarkModeContext";
-import { me, refresh, logout as logoutApi, updateDisplayName, deleteMyAccount } from "../api/auth";
-import { sendChatMessage } from "../api/chat";
+import { me, refresh, logout as logoutApi, updateDisplayName, changePassword } from "../api/auth";
+import { sendChatMessage, getDatasource } from "../api/chat";
 import {
   createChatSession,
   getUserSessions,
@@ -37,6 +37,7 @@ export default function AppHome() {
   const [sessions, setSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [datasource, setDatasource] = useState(null);
   const abortControllerRef = useRef(null);
 
   const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
@@ -60,6 +61,7 @@ export default function AppHome() {
         if (userSessions.length > 0) {
           setActiveChatId(userSessions[0].id);
         }
+        getDatasource().then((d) => setDatasource(d.table)).catch(() => {});
       } catch {
         nav("/login");
       }
@@ -384,6 +386,7 @@ export default function AppHome() {
         uploadStatus={uploadStatus}
         onCancelUpload={handleCancelUpload}
         onClearChat={handleClearChat}
+        datasource={datasource}
       />
 
       {rightPanelOpen && (
