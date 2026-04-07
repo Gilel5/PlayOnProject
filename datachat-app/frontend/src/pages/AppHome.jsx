@@ -33,7 +33,7 @@ export default function AppHome() {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState([]);
   const [messagesMap, setMessagesMap] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingChats, setLoadingChats] = useState({});
   const [sessions, setSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [uploadStatus, setUploadStatus] = useState(null);
@@ -117,24 +117,26 @@ export default function AppHome() {
   async function sendMessage(text) {
     if (!text.trim() || !activeChatId) return;
 
+    const currentChatId = activeChatId;
+
     // Add the user's message to the active chat immediately (optimistic update)
     const userMessage = { id: Date.now(), role: "user", text };
     setMessagesMap((prev) => ({
       ...prev,
-      [activeChatId]: [...(prev[activeChatId] || [WELCOME_MESSAGE]), userMessage],
+      [currentChatId]: [...(prev[currentChatId] || [WELCOME_MESSAGE]), userMessage],
     }));
     setInput("");
-    setIsLoading(true);
+    setLoadingChats((prev) => ({ ...prev, [currentChatId]: true }));
 
     try {
       // Send the message to the backend along with the session ID
-      const response = await sendChatMessage(text, activeChatId);
+      const response = await sendChatMessage(text, currentChatId);
       const botMessage = { id: Date.now() + 1, role: "bot", text: response.reply };
 
       // Append the bot's reply to the active chat's message history
       setMessagesMap((prev) => ({
         ...prev,
-        [activeChatId]: [...(prev[activeChatId] || []), botMessage],
+        [currentChatId]: [...(prev[currentChatId] || []), botMessage],
       }));
 
       // Refresh the sessions list so the sidebar reflects the updated last_message_at order
@@ -147,10 +149,10 @@ export default function AppHome() {
       const errorMessage = { id: Date.now() + 1, role: "bot", text: "Sorry, I couldn't process your message. Please try again." };
       setMessagesMap((prev) => ({
         ...prev,
-        [activeChatId]: [...(prev[activeChatId] || []), errorMessage],
+        [currentChatId]: [...(prev[currentChatId] || []), errorMessage],
       }));
     } finally {
-      setIsLoading(false);
+      setLoadingChats((prev) => ({ ...prev, [currentChatId]: false }));
     }
   }
 
@@ -373,7 +375,7 @@ export default function AppHome() {
         files={files}
         removeFile={removeFile}
         sendMessage={sendMessage}
-        isLoading={isLoading}
+        isLoading={loadingChats[activeChatId] || false}
         sidebarOpen={sidebarOpen}
         onSidebarOpen={() => setSidebarOpen(true)}
         rightPanelOpen={rightPanelOpen}
