@@ -7,7 +7,7 @@ export async function sendChatMessage(message, sessionId) {
 }
 
 export async function generateSummaryReports() {
-  // Summary generation, can take up to 2 minutes
+  // Summary generation, can take up to 3 minutes
   // Returns the blob URL for the Excel file
   const response = await api.post("/chat/summary", {}, {
     timeout: 180000,

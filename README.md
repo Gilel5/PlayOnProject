@@ -110,7 +110,7 @@ See `.env.example` for reference
 1. Start the backend: `uvicorn app.main:app --reload` from `backend/`
 2. Start the frontend: `npm run dev` from `frontend/`
 3. Open `http://localhost:5173`
-4. Upload a CSV or PDF using the paperclip in the chat input
+4. Upload a CSV using the paperclip in the chat input
 5. Ask questions about your data
 6. Use **Generate Report** to export an Excel summary
 7. Use the right panel menu to export a chat as PDF
