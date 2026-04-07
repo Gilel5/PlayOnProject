@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_SIZE_BYTES = 1024 * 1024 * 1024
 
 # How many rows are processed at a time during the CSV read/clean phase.
-# This keeps memory usage flat regardless of file size.
 CHUNK_SIZE = 100_000
 
 # Maximum number of uploads allowed to write to Supabase at the same time.
@@ -33,13 +32,14 @@ MAX_CONCURRENT = 3
 # Semaphore that enforces the MAX_CONCURRENT limit across all incoming requests.
 _upload_semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
-# In-memory progress store keyed by job_id. NOTE: only works for a single worker.
+# In-memory progress store keyed by job_id. Note: only works for a single worker.
 # Each entry: {"phase": str, "rows_processed": int, "total_rows": int, "updated_at": float}
 _upload_progress: dict[str, dict] = {}
 # How long to keep a finished/abandoned progress entry around before purging.
 _PROGRESS_TTL_SECONDS = 3600
 
 
+#Updates progress for job
 def _set_progress(job_id: str | None, update: dict) -> None:
     """Record progress for a job. No-op if job_id is missing."""
     if not job_id:
@@ -48,7 +48,7 @@ def _set_progress(job_id: str | None, update: dict) -> None:
     entry.update(update)
     entry["updated_at"] = time.time()
 
-
+# removed entries older than a hour
 def _purge_stale_progress() -> None:
     """Remove entries older than _PROGRESS_TTL_SECONDS so the dict doesn't grow forever."""
     cutoff = time.time() - _PROGRESS_TTL_SECONDS
@@ -97,11 +97,11 @@ def _get_table_columns(table_name: str) -> set[str]:
 def _normalize_col(c: str) -> str:
     """
     Standardize a column name so it matches the Supabase table schema:
-      - Lowercase and strip whitespace
-      - Spaces → underscores        (e.g. 'transaction date'  → 'transaction_date')
-      - % → pct                     (e.g. 'revenue share %'   → 'revenue_share_pct')
-      - $ → usd                     (e.g. 'revenue share $'   → 'revenue_share_usd')
-      - Hyphens → underscores       (e.g. 'sub-type'          → 'sub_type')
+       Lowercase and strip whitespace
+       Spaces → underscores        (e.g. 'transaction date'  → 'transaction_date')
+      % → pct                     (e.g. 'revenue share %'   → 'revenue_share_pct')
+       $ → usd                     (e.g. 'revenue share $'   → 'revenue_share_usd')
+      Hyphens → underscores       (e.g. 'sub-type'          → 'sub_type')
     """
     return (
         c.lower().strip()
@@ -113,10 +113,7 @@ def _normalize_col(c: str) -> str:
 
 
 def _friendly_error(e: Exception) -> str:
-    """
-    Parse a psycopg2 database error and return a user-friendly message.
-    The full technical error is logged separately on the server.
-    """
+  
     msg = str(e)
 
     # NOT NULL violation — e.g. null value in column "processor_transaction_id"
@@ -170,6 +167,17 @@ async def upload_csv(
         _set_progress(job_id, {"phase": "error"})
         raise HTTPException(status_code=413, detail="File is too large. Maximum size is 1 GB.")
 
+    # Check if this file has already been uploaded by this user.
+    existing = db.query(FileUpload).filter_by(
+        user_id=user["sub"], filename=file.filename
+    ).first()
+    if existing:
+        _set_progress(job_id, {"phase": "done"})
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{file.filename}' has already been uploaded.",
+        )
+
     table_name = settings.FINANCE_TABLE_NAME
 
     # Step 2 — Read the entire file into a memory buffer (io.BytesIO).
@@ -185,7 +193,7 @@ async def upload_csv(
     buf = io.BytesIO(contents)
 
     # Count total data rows by counting newlines (fast, even for 300MB files).
-    # Subtract 1 for the header; trailing newlines are fine since we cap at >=0.
+    # Subtract 1 for the header
     total_rows = max(0, contents.count(b"\n") - 1)
     _set_progress(job_id, {"phase": "validating", "total_rows": total_rows})
 
@@ -243,6 +251,9 @@ async def upload_csv(
                     # Drop completely blank rows (empty lines in the CSV).
                     chunk = chunk.dropna(how="all")
 
+                    # Drop exact duplicate rows within the chunk.
+                    chunk = chunk.drop_duplicates()
+
                     # Strip any leading $ from currency columns so they can be
                     # stored as numeric without causing a type error.
                     for col in ("retail_amount", "base_amount", "sales_tax_amount"):
@@ -299,6 +310,9 @@ async def upload_csv(
                         SELECT {cols} FROM staging
                         ON CONFLICT DO NOTHING
                     """)
+                    rows_written = cursor.rowcount
+                else:
+                    rows_written = 0
 
             # Commit the transaction — this is the only commit in the entire upload.
             raw_conn.commit()
@@ -317,14 +331,21 @@ async def upload_csv(
     db.add(FileUpload(
         user_id=user["sub"],
         filename=file.filename,
-        rows_inserted=rows_inserted,
+        rows_inserted=rows_written,
         file_size=round(len(contents) / (1024 * 1024), 2),
     ))
     db.commit()
 
     _set_progress(job_id, {
         "phase": "done",
-        "rows_processed": rows_inserted,
+        "rows_processed": rows_written,
         "total_rows": total_rows,
     })
-    return {"rows_inserted": rows_inserted, "table": table_name}
+
+    response = {"rows_inserted": rows_written, "table": table_name}
+    if rows_written == 0:
+        response["message"] = "All data in this file is already present in the database."
+    elif rows_written < rows_inserted:
+        skipped = rows_inserted - rows_written
+        response["message"] = f"{skipped:,} duplicate rows were skipped."
+    return response

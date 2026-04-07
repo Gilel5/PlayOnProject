@@ -361,8 +361,13 @@ export default function ChatArea({
           );
         })()}
         {uploadStatus?.rows_inserted != null && (
-          <div className="mb-2 px-1 text-xs text-green-600">
-            ✓ {uploadStatus.rows_inserted.toLocaleString()} rows added to <strong>{uploadStatus.table}</strong>
+          <div className={`mb-2 px-1 text-xs ${uploadStatus.rows_inserted === 0 ? (darkMode ? "text-yellow-400" : "text-yellow-600") : "text-green-600"}`}>
+            {uploadStatus.rows_inserted === 0
+              ? uploadStatus.message || "No new rows were added."
+              : <>✓ {uploadStatus.rows_inserted.toLocaleString()} rows added to <strong>{uploadStatus.table}</strong>
+                {uploadStatus.message && <span className={darkMode ? " text-yellow-400" : " text-yellow-600"}> ({uploadStatus.message})</span>}
+              </>
+            }
           </div>
         )}
         {uploadStatus?.error && (
