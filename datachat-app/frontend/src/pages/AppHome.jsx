@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { DarkModeContext } from "../components/DarkModeContext";
-import { me, refresh, logout as logoutApi, updateDisplayName, changePassword } from "../api/auth";
+import { me, refresh, logout as logoutApi, updateDisplayName, changePassword, deleteMyAccount } from "../api/auth";
 import { sendChatMessage, getDatasource } from "../api/chat";
 import {
   createChatSession,
