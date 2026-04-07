@@ -302,14 +302,13 @@ export default function ChatArea({
         </div>
         {/*  Right side of top bar */}
         <div className="flex items-center gap-2">
-          {datasource && (
             <div className="relative" ref={dsDropdownRef}>
               <button
                 onClick={handleDsDropdownToggle}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${darkMode ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
               >
                 <Database size={12} />
-                <span>{datasource}</span>
+                <span>Uploaded Files</span>
                 <ChevronDown size={12} className={`transition-transform ${dsDropdownOpen ? "rotate-180" : ""}`} />
               </button>
               {dsDropdownOpen && (
@@ -331,7 +330,7 @@ export default function ChatArea({
                         <div key={i} className={`px-3 py-2 text-xs ${darkMode ? "hover:bg-slate-800 border-slate-800" : "hover:bg-gray-50 border-gray-50"} ${i > 0 ? "border-t" : ""}`}>
                           <div className={`font-medium truncate ${darkMode ? "text-slate-200" : "text-gray-700"}`}>{f.filename}</div>
                           <div className={`mt-0.5 flex gap-3 ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
-                            <span>{f.file_size < 1 ? `${(f.file_size * 1024).toFixed(0)} KB` : `${f.file_size.toFixed(1)} MB`}</span>
+                            <span>{f.rows_inserted.toLocaleString()} rows</span>
                             <span>{new Date(f.uploaded_at).toLocaleDateString()}</span>
                           </div>
                         </div>
@@ -341,7 +340,6 @@ export default function ChatArea({
                 </div>
               )}
             </div>
-          )}
           <button className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
             onClick={(e) => handleMenuOpen(e, "current-chat")}
           >
