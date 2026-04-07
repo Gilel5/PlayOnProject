@@ -105,3 +105,20 @@ export async function changePassword(accessToken, currentPassword, newPassword) 
     }
 }
 
+export async function deleteMyAccount(accessToken) {
+  const res = await fetch("http://localhost:8000/auth/me", {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Failed to delete account: ${detail}`);
+  }
+
+  return await res.json();
+}
+
