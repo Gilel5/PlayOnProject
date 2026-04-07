@@ -5,6 +5,7 @@ import Register from "./pages/Register";
 import AppHome from "./pages/AppHome";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+
 export default function App() {
   return (
     <DarkModeProvider>
