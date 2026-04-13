@@ -1,7 +1,8 @@
 import uuid
-from sqlalchemy import String, DateTime, ForeignKey, Text, func
+from sqlalchemy import String, DateTime, ForeignKey, Text, func, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from typing import Optional
 
 from app.db.base import Base
 
@@ -31,6 +32,13 @@ class ChatMessage(Base):
     text: Mapped[str] = mapped_column(
         Text,
         nullable=False
+    )
+
+    # Structured chart data for visualizations (bot messages only)
+    chart_data: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None
     )
 
     created_at: Mapped[DateTime] = mapped_column(

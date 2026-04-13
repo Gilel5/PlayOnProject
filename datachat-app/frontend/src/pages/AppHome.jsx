@@ -80,6 +80,7 @@ export default function AppHome() {
             id: m.id,
             role: m.role,
             text: m.text,
+            chart_data: m.chart_data || null,
           }));
           setMessagesMap((prev) => ({ ...prev, [activeChatId]: [WELCOME_MESSAGE, ...mapped] }));
         }
@@ -133,7 +134,7 @@ export default function AppHome() {
     try {
       // Send the message to the backend along with the session ID
       const response = await sendChatMessage(text, currentChatId);
-      const botMessage = { id: Date.now() + 1, role: "bot", text: response.reply };
+      const botMessage = { id: Date.now() + 1, role: "bot", text: response.reply, chart_data: response.chart_data || null };
 
       // Append the bot's reply to the active chat's message history
       setMessagesMap((prev) => ({
