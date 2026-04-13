@@ -161,7 +161,17 @@ def get_session_messages(session_id: uuid.UUID, db: Session = Depends(get_db)):
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
-    return messages
+    return [
+        {
+            "id": str(m.id),
+            "session_id": str(m.session_id),
+            "role": m.role,
+            "text": m.text,
+            "chart_data": m.chart_data,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in messages
+    ]
 
 @router.delete("/{session_id}/messages")
 def clear_session_messages(session_id: uuid.UUID, db: Session = Depends(get_db)):

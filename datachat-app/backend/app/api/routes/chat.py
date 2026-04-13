@@ -39,15 +39,17 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     """Send the user's message to OpenAI with finance-data context."""
     try:
         loop = asyncio.get_event_loop()
-        reply = await loop.run_in_executor(_executor, get_data_chat_response, request.message)
+        result = await loop.run_in_executor(_executor, get_data_chat_response, request.message)
+        reply = result["text"]
+        chart_data = result.get("chart_data")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OpenAI error: {str(e)}")
 
     if request.session_id:
         #save the user's message
         db.add(ChatMessage(session_id=request.session_id, role="user", text=request.message))
-        #Save chatbot response
-        db.add(ChatMessage(session_id=request.session_id, role="bot", text=reply))
+        #Save chatbot response (with chart data if present)
+        db.add(ChatMessage(session_id=request.session_id, role="bot", text=reply, chart_data=chart_data))
         session = db.query(ChatSession).filter(ChatSession.id == request.session_id).first()
         if session:
             session.last_message_at = datetime.now(timezone.utc)
@@ -87,6 +89,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
     return {
         "reply": reply,
+        "chart_data": chart_data,
         "session_id": str(session.id) if request.session_id and session else None,
         "chat_title": session.chat_title if request.session_id and session else None,
         "chat_summary": session.chat_summary if request.session_id and session else None,

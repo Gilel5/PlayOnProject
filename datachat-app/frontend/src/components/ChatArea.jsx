@@ -6,6 +6,7 @@ import { generateSummaryReports } from "../api/chat";
 import { getUploadedFiles } from "../api/upload";
 import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
+import ChartBlock from "./messages/ChartBlock";
 import PdfAttachment from "./PdfAttachment";
 import File from "./File";
 import remarkGfm from "remark-gfm";
@@ -366,6 +367,7 @@ export default function ChatArea({
               <div className={`prose prose-sm max-w-none transition-colors prose-table:w-full prose-td:border prose-td:border-gray-300 prose-th:border prose-th:border-gray-300 prose-td:px-2 prose-td:py-1 prose-th:px-2 prose-th:py-1 ${darkMode ? "prose-invert prose-headings:text-white prose-p:text-slate-100 prose-strong:text-white prose-li:text-slate-100" : "prose-headings:text-gray-900 prose-p:text-gray-800 prose-strong:text-gray-900 prose-li:text-gray-800"}`}>
   <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatFlattenedTable(msg.text)}</ReactMarkdown>
 </div>
+              {msg.chart_data && <ChartBlock chartData={msg.chart_data} />}
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
           )
