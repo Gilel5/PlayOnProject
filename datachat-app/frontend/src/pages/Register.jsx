@@ -56,7 +56,7 @@ export default function Register() {
             </div>
 
             <div>
-              <label className={`block text-sm font-medium mb-1.5 ${darkMode ? "text-gray-200" : "text-gray-700"}`}>Password</label>
+              <label className={`block text-sm font-medium mb-1.5 ${darkMode ? "text-gray-200" : "text-gray-700"}`}>Password (Must be 8+ characters with uppercase, lowercase, number, and special character.)</label>
               <input
                 type="password"
                 value={password}
