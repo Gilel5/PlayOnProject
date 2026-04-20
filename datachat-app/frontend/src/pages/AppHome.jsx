@@ -42,6 +42,16 @@ export default function AppHome() {
 
   const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
 
+  function buildFollowUpQuestions(reply) {
+    if (!reply) return null;
+
+    return [
+      "How does this compare to other months?",
+      "What is the impact of this?",
+      "What is notable about this?",
+    ];
+  }
+
   async function getAccessToken() {
     const existing = sessionStorage.getItem("access_token");
     if (existing) return existing;
@@ -81,6 +91,7 @@ export default function AppHome() {
             role: m.role,
             text: m.text,
             chart_data: m.chart_data || null,
+            followUpQuestions: m.followUpQuestions || m.follow_up_questions || null,
           }));
           setMessagesMap((prev) => ({ ...prev, [activeChatId]: [WELCOME_MESSAGE, ...mapped] }));
         }
@@ -121,20 +132,34 @@ export default function AppHome() {
     if (!text.trim() || !activeChatId) return;
 
     const currentChatId = activeChatId;
-
+    
     // Add the user's message to the active chat immediately (optimistic update)
-    const userMessage = { id: Date.now(), role: "user", text };
-    setMessagesMap((prev) => ({
-      ...prev,
-      [currentChatId]: [...(prev[currentChatId] || [WELCOME_MESSAGE]), userMessage],
-    }));
+    setMessagesMap((prev) => {
+      const oldMessages = prev[currentChatId] || [WELCOME_MESSAGE];
+      const cleanedMessages = oldMessages.map((msg) =>
+        msg.role === "bot" && msg.followUpQuestions ? { ...msg, followUpQuestions: undefined } : msg
+      );
+      const userMessage = { id: Date.now(), role: "user", text };
+      return {
+        ...prev,
+        [currentChatId]: [...cleanedMessages, userMessage],
+      };
+    });
+
     setInput("");
     setLoadingChats((prev) => ({ ...prev, [currentChatId]: true }));
 
     try {
       // Send the message to the backend along with the session ID
       const response = await sendChatMessage(text, currentChatId);
-      const botMessage = { id: Date.now() + 1, role: "bot", text: response.reply, chart_data: response.chart_data || null };
+      const followUpQuestions = response.followUpQuestions || response.follow_up_questions || buildFollowUpQuestions(response.reply, text);
+      const botMessage = {
+        id: Date.now() + 1,
+        role: "bot",
+        text: response.reply,
+        chart_data: response.chart_data || null,
+        followUpQuestions,
+      };
 
       // Append the bot's reply to the active chat's message history
       setMessagesMap((prev) => ({
