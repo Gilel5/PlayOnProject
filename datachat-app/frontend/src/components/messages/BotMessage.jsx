@@ -1,7 +1,8 @@
 import { useContext } from "react";
 import { DarkModeContext } from "../DarkModeContext";
+import FollowUpQuestions from "./FollowUpQuestions";
 
-export default function BotMessage({ children }) {
+export default function BotMessage({ children, followUpQuestions, onSelectFollowUp }) {
   const { darkMode } = useContext(DarkModeContext);
 
   return (
@@ -17,7 +18,12 @@ export default function BotMessage({ children }) {
           />
         </svg>
       </div>
-      <div className={`max-w-2xl text-sm mt-1.5 ${darkMode ? "text-white" : "text-black"}`}>{children}</div>
+      <div className="flex-1">
+        <div className={`max-w-2xl text-sm mt-1.5 ${darkMode ? "text-white" : "text-black"}`}>{children}</div>
+        {followUpQuestions && onSelectFollowUp && (
+          <FollowUpQuestions questions={followUpQuestions} onSelectQuestion={onSelectFollowUp} />
+        )}
+      </div>
     </div>
   );
 }

@@ -271,6 +271,15 @@ export default function ChatArea({
     onUploadCsv(file);
   }
 
+  function handleFollowUpQuestion(question) {
+    setInput(question);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      const textarea = document.querySelector("textarea");
+      textarea?.focus();
+    }, 100);
+  }
+
   return (
     <div className={`flex-1 flex flex-col min-w-0 ${darkMode ? "bg-black text-white" : "bg-white text-gray-900"}`}>
       {/* Top bar */}
@@ -363,7 +372,7 @@ export default function ChatArea({
           msg.role === "user" ? (
             <UserMessage key={msg.id} text={msg.text} />
           ) : (
-            <BotMessage key={msg.id}>
+            <BotMessage key={msg.id} followUpQuestions={msg.followUpQuestions} onSelectFollowUp={handleFollowUpQuestion}>
               <div className={`prose prose-sm max-w-none transition-colors prose-table:w-full prose-td:border prose-td:border-gray-300 prose-th:border prose-th:border-gray-300 prose-td:px-2 prose-td:py-1 prose-th:px-2 prose-th:py-1 ${darkMode ? "prose-invert prose-headings:text-white prose-p:text-slate-100 prose-strong:text-white prose-li:text-slate-100" : "prose-headings:text-gray-900 prose-p:text-gray-800 prose-strong:text-gray-900 prose-li:text-gray-800"}`}>
   <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatFlattenedTable(msg.text)}</ReactMarkdown>
 </div>
