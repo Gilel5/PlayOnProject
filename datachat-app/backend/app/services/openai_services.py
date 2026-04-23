@@ -5,6 +5,7 @@ import re
 
 from openai import OpenAI
 from sqlalchemy import text
+from typing import Optional
 
 from app.core.config import settings
 from app.db.finance_session import finance_engine
@@ -13,6 +14,10 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 logger = logging.getLogger(__name__)
 
 TABLE = settings.FINANCE_TABLE_NAME
+
+#Setting up Tree of Thought
+TOT_NUM_CANDIDATES = 3 #number of SQL branches to explore
+TOT_ENABLED = True #set to false to revert back to single-shot prompt generation
 
 # Schema helper -> one query, cached for the lifetime of the process
 _CACHED_SCHEMA: str | None = None
@@ -76,6 +81,55 @@ Rules:
 - Always aggregate, group, or filter results so the output is concise (ideally under 50 rows).
 - Never use SELECT * — always select only the columns relevant to the question.
 - If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
+"""
+
+_TOT_SQL_CANDIDATES_PROMPT = """\
+    You are a SQL expert. Given a user question and a PostgreSQL schema,
+    produce {n} DISTINCT SQL SELECT queries that each attempt to answer the question
+    from a different angle or with a different interpretation.
+
+    Schema Rules:
+    - Return ONLY the raw SQL, no markdown fences, no explanation.
+    - Use only columns that exist in the schema.
+    - Always reference the table as: {table}
+    - Limit results to 200 rows max unless the user explicitly asks for more.
+    - For monetary values, the columns base_amount and retail_amount are numeric (doubles).
+    - processor_fee is stored as TEXT; cast to NUMERIC when doing math with it.
+    - transaction_date is a timestamptz column.
+    - processor_transaction_type has values: Charge, Dispute, Fee, Refund
+    - transaction_type has values: New Purchase, Rebill, and various fee/radar types.
+    - pass_name has values: Month, Annual, Media, Season, and others.
+    - Use EXTRACT or DATE_TRUNC for date-based grouping.
+    - Never use DELETE, UPDATE, INSERT, DROP, ALTER, TRUNCATE, or CREATE.
+    - Numeric columns (base_amount, retail_amount) may contain NaN values. When
+    aggregating (SUM, AVG, etc.), exclude NaN rows by adding a WHERE or CASE
+    filter, e.g.: SUM(CASE WHEN base_amount = base_amount THEN base_amount ELSE 0 END)
+    (NaN != NaN in IEEE 754, so base_amount = base_amount is false for NaN rows).
+    - Always aggregate, group, or filter results so the output is concise (ideally under 50 rows).
+    - Never use SELECT * — always select only the columns relevant to the question.
+    - If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
+
+    Output format:
+    Return ONLY a vvalid JSON array of {n} SQL strings - no markdown, no explanation.
+    Example: ["SELECT ...", "SELECT ...", "SELECT ..."]
+"""
+
+# Evaluate Prompt - model acts as a judge, scoring all potential answers comparatively
+_TOT_SQL_EVALUATE_PROMPT = """\
+You are a SQL review expert. A user asked a financial data question and {n}
+candidate SQL queries were generated. Pick the BEST one.
+
+Evaluation criteria (in order of importance):
+1. Correctly answers the user's question — right columns, filters, aggregation.
+2. Handles edge cases — NaN guard on numeric columns, proper date truncation.
+3. Efficiency and clarity.
+
+Return ONLY a valid JSON object, no markdown:
+{{
+  "best_index": <0-based index of the best candidate>,
+  "scores": [<score 1-10 for candidate 0>, <score for candidate 1>, ...],
+  "reason": "<one sentence explaining why the chosen candidate is best>"
+}}
 """
 
 _ANSWER_SYSTEM_PROMPT = """\
@@ -199,6 +253,122 @@ def _generate_chart_data(message: str, sql: str, rows: list) -> dict | None:
         logger.warning("Chart generation failed (non-fatal): %s", e)
         return None
 
+def _generate_sql_candidates(message: str, schema: str, n: int = TOT_NUM_CANDIDATES) -> list[str]:
+    #TOT branch step: generate N distinct SQL candidates in a single call
+    #temp of 0.7 encourages multiple interpretations
+    #returns a list of raw SQL strings, or [] on parse failure
+
+    prompt = _TOT_SQL_CANDIDATES_PROMPT.format(n=n, table=TABLE)
+    resp = client.chat.completions.create(
+        model="gpt-5.4",
+        temperature = 0.4,
+        messages=[
+          {"role": "system", "content": prompt},
+          {"role": "user", "content": f"Schema:\n{schema}\n\nQuestion: {message}"},  
+        ],
+    )
+    raw = resp.choices[0].message.content.strip()
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+    if fence_match:
+        raw = fence_match.group(1).strip()
+    try:
+        candidates = json.loads(raw)
+        if isinstance(candidates, list) and all(isinstance(c, str) for c in candidates):
+            logger.info("ToT generated %d SQL candidates", len(candidates))
+            return candidates
+    except json.JSONDecodeError:
+        pass
+    logger.warning("ToT candidate generation returned unparseable output; falling back")
+    return []
+
+
+def _select_best_sql(message: str, schema: str, candidates: list[str]) -> tuple[str, str]:
+    """
+    ToT Evaluate step: present all N candidates to the model and ask it to
+    reason comparatively. Returns (best_sql, reason).
+    temperature=0 so the judge is deterministic.
+    """
+    candidates_text = "\n\n".join(
+        f"Candidate {i}:\n{sql}" for i, sql in enumerate(candidates)
+    )
+    eval_prompt = _TOT_SQL_EVALUATE_PROMPT.format(n=len(candidates))
+    resp = client.chat.completions.create(
+        model="gpt-5.4",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": eval_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"User question: {message}\n\n"
+                    f"Schema:\n{schema}\n\n"
+                    f"Candidates:\n{candidates_text}"
+                ),
+            },
+        ],
+    )
+    raw = resp.choices[0].message.content.strip()
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+    if fence_match:
+        raw = fence_match.group(1).strip()
+    try:
+        result = json.loads(raw)
+        best_idx = int(result.get("best_index", 0))
+        reason = result.get("reason", "")
+        scores = result.get("scores", [])
+        best_idx = max(0, min(best_idx, len(candidates) - 1))  # clamp to valid range
+        logger.info("ToT selected candidate %d (scores=%s) — %s", best_idx, scores, reason)
+        return candidates[best_idx], reason
+    except (json.JSONDecodeError, KeyError, ValueError):
+        logger.warning("ToT evaluation failed to parse; using candidate 0")
+        return candidates[0], "fallback to first candidate"
+
+def _generate_sql_single_shot(message: str, schema: str) -> str:
+    """Original single-shot SQL generation — used as ToT fallback."""
+    resp = client.chat.completions.create(
+        model="gpt-5.4",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": _SQL_SYSTEM_PROMPT.format(table=TABLE)},
+            {"role": "user", "content": f"Schema:\n{schema}\n\nQuestion: {message}"},
+        ],
+    )
+    sql = _extract_sql(resp.choices[0].message.content)
+    _validate_sql(sql)
+    return sql
+
+def _generate_sql_with_tot(message: str, schema: str) -> str:
+    """
+    Full ToT pipeline: Branch → Evaluate → Select.
+    Falls back to single-shot if TOT_ENABLED=False or too few valid candidates.
+    """
+    if not TOT_ENABLED:
+        return _generate_sql_single_shot(message, schema)
+
+    candidates = _generate_sql_candidates(message, schema)
+
+    if len(candidates) < 2:
+        logger.warning("ToT produced fewer than 2 candidates; falling back to single-shot")
+        return _generate_sql_single_shot(message, schema)
+
+    # Validate each candidate and discard any unsafe ones
+    clean_candidates: list[str] = []
+    for raw_sql in candidates:
+        try:
+            sql = _extract_sql(raw_sql)
+            _validate_sql(sql)
+            clean_candidates.append(sql)
+        except ValueError:
+            logger.warning("ToT discarded unsafe candidate: %s", raw_sql[:80])
+
+    if len(clean_candidates) < 2:
+        logger.warning("Too few safe ToT candidates; falling back to single-shot")
+        return _generate_sql_single_shot(message, schema)
+
+    best_sql, reason = _select_best_sql(message, schema, clean_candidates)
+    logger.info("ToT winning SQL:\n%s", best_sql)
+    logger.info("ToT winner reason: %s", reason)
+    return best_sql
 
 def get_data_chat_response(message: str) -> dict:
     """
@@ -214,19 +384,9 @@ def get_data_chat_response(message: str) -> dict:
         schema = get_table_schema()
         logger.info("Schema fetched OK")
 
-        # Step 1 — ask GPT to write SQL
-        sql_resp = client.chat.completions.create(
-            model="gpt-5.4",
-            temperature=0,
-            messages=[
-                {"role": "system", "content": _SQL_SYSTEM_PROMPT.format(table=TABLE)},
-                {"role": "user", "content": f"Schema:\n{schema}\n\nQuestion: {message}"},
-            ],
-        )
-        raw_sql = sql_resp.choices[0].message.content
-        sql = _extract_sql(raw_sql)
-        _validate_sql(sql)
-        logger.info("Generated SQL: %s", sql)
+        # Step 1 — Tree of Thought SQL generation
+        sql = _generate_sql_with_tot(message, schema)
+        logger.info("Final SQL (ToT): %s", sql)
 
         # Step 2 — execute the query
         with finance_engine.connect() as conn:
