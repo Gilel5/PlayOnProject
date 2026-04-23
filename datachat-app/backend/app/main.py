@@ -7,6 +7,7 @@
     # create DB tables (local)
 
 from fastapi import FastAPI
+import logging
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 from app.api.routes.upload import router as upload_router
@@ -19,6 +20,11 @@ from app.api.chat_sessions import router as chat_sessions_router
 # Import models so SQLAlchemy "sees" them when creating metadata.
 # Without importing, Base.metadata might be missing tables.
 from app.models import user, refresh_token, chat_session  # noqa: F401
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+)
 
 app = FastAPI(title="Chat Analytics API")
 
