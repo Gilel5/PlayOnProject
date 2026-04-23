@@ -95,14 +95,13 @@ def _get_table_columns(table_name: str) -> set[str]:
 
 
 def _normalize_col(c: str) -> str:
-    """
-    Standardize a column name so it matches the Supabase table schema:
-       Lowercase and strip whitespace
-       Spaces → underscores        (e.g. 'transaction date'  → 'transaction_date')
-      % → pct                     (e.g. 'revenue share %'   → 'revenue_share_pct')
-       $ → usd                     (e.g. 'revenue share $'   → 'revenue_share_usd')
-      Hyphens → underscores       (e.g. 'sub-type'          → 'sub_type')
-    """
+    
+   # Standardize a column name so it matches the Supabase table schema:
+       #Lowercase and strip whitespace
+       #Spaces → underscores        transaction date  → transaction_date
+      #% → pct                     revenue share %   → revenue_share_pct
+       #$ → usd                     revenue share $ → revenue_share_usd
+      #Hyphens → underscores       sub-type  → sub_type
     return (
         c.lower().strip()
         .replace(" ", "_")
