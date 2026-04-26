@@ -15,6 +15,7 @@ export default function Sidebar({
   onArchiveChat,
   onClose,
   onSettingsOpen,
+  onViewSummary,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [matchingSessionIds, setMatchingSessionIds] = useState(null);
@@ -262,6 +263,12 @@ export default function Sidebar({
           style={{ position: "fixed", top: menuPosition.top, right: menuPosition.right }}
           className={`w-36 rounded shadow-lg z-50 border ${darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-gray-200"}`}
         >
+          <button
+            onClick={() => { onViewSummary(openMenu); setOpenMenu(null); }}
+            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
+          >
+            View Summary
+          </button>
           <button
             onClick={() => startRename(activeMenuSession)}
             className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}

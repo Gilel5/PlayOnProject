@@ -74,10 +74,15 @@ Rules:
 - pass_name has values: Month, Annual, Media, Season, and others.
 - Use EXTRACT or DATE_TRUNC for date-based grouping.
 - Never use DELETE, UPDATE, INSERT, DROP, ALTER, TRUNCATE, or CREATE.
-- Numeric columns (base_amount, retail_amount) may contain NaN values. When
-  aggregating (SUM, AVG, etc.), exclude NaN rows by adding a WHERE or CASE
-  filter, e.g.: SUM(CASE WHEN base_amount = base_amount THEN base_amount ELSE 0 END)
-  (NaN != NaN in IEEE 754, so base_amount = base_amount is false for NaN rows).
+- Numeric columns (base_amount, retail_amount) may contain NaN stored as the text
+  string 'NaN' or as an IEEE 754 NaN float. ALWAYS use the NULLIF cast pattern when
+  reading these columns so non-numeric values are treated as NULL:
+    NULLIF(col::text, 'NaN')::double precision
+  For aggregations wrap that in COALESCE so the result is never NULL:
+    COALESCE(SUM(NULLIF(retail_amount::text, 'NaN')::double precision), 0)
+    COALESCE(SUM(NULLIF(base_amount::text, 'NaN')::double precision), 0)
+  Use this pattern for every reference to base_amount or retail_amount, including
+  SELECT, WHERE, ORDER BY, and GROUP BY clauses.
 - Always aggregate, group, or filter results so the output is concise (ideally under 50 rows).
 - Never use SELECT * — always select only the columns relevant to the question.
 - If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
@@ -101,10 +106,15 @@ _TOT_SQL_CANDIDATES_PROMPT = """\
     - pass_name has values: Month, Annual, Media, Season, and others.
     - Use EXTRACT or DATE_TRUNC for date-based grouping.
     - Never use DELETE, UPDATE, INSERT, DROP, ALTER, TRUNCATE, or CREATE.
-    - Numeric columns (base_amount, retail_amount) may contain NaN values. When
-    aggregating (SUM, AVG, etc.), exclude NaN rows by adding a WHERE or CASE
-    filter, e.g.: SUM(CASE WHEN base_amount = base_amount THEN base_amount ELSE 0 END)
-    (NaN != NaN in IEEE 754, so base_amount = base_amount is false for NaN rows).
+    - Numeric columns (base_amount, retail_amount) may contain NaN stored as the text
+    string 'NaN' or as an IEEE 754 NaN float. ALWAYS use the NULLIF cast pattern when
+    reading these columns so non-numeric values are treated as NULL:
+      NULLIF(col::text, 'NaN')::double precision
+    For aggregations wrap that in COALESCE so the result is never NULL:
+      COALESCE(SUM(NULLIF(retail_amount::text, 'NaN')::double precision), 0)
+      COALESCE(SUM(NULLIF(base_amount::text, 'NaN')::double precision), 0)
+    Use this pattern for every reference to base_amount or retail_amount, including
+    SELECT, WHERE, ORDER BY, and GROUP BY clauses.
     - Always aggregate, group, or filter results so the output is concise (ideally under 50 rows).
     - Never use SELECT * — always select only the columns relevant to the question.
     - If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
@@ -188,6 +198,21 @@ Data rules:
 """
 
 
+# Generates contextual follow-up questions based on what the bot just answered.
+_FOLLOW_UP_PROMPT = """\
+You are a financial data analyst assistant. A user asked a question about their
+revenue data and received an answer. Generate exactly 3 concise follow-up questions
+a financial analyst would naturally ask next, based on the context of the answer.
+
+Rules:
+- Return ONLY a valid JSON array of 3 strings, no markdown, no explanation.
+- Questions should be specific to the data context, not generic.
+- Each question should be under 12 words.
+- Questions should uncover actionable insights (trends, comparisons, breakdowns).
+Example: ["How does this compare to last year?", "Which pass type drives this?", "What caused the spike in March?"]
+"""
+
+
 def _extract_sql(raw: str) -> str:
     """Strip optional markdown fencing from GPT output."""
     match = re.search(r"```(?:sql)?\s*\n?(.*?)```", raw, re.DOTALL)
@@ -252,6 +277,45 @@ def _generate_chart_data(message: str, sql: str, rows: list) -> dict | None:
     except Exception as e:
         logger.warning("Chart generation failed (non-fatal): %s", e)
         return None
+
+def _generate_follow_up_questions(user_message: str, bot_reply: str) -> list[str]:
+    """
+    Generate 3 contextual follow-up questions based on the conversation turn.
+    Non-blocking — returns a hardcoded fallback list if the call fails so the
+    rest of the response is never held up by this step.
+    """
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-5.4",
+            temperature=0.7,
+            messages=[
+                {"role": "system", "content": _FOLLOW_UP_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"User question: {user_message}\n\n"
+                        f"Assistant answer: {bot_reply[:1000]}"
+                    ),
+                },
+            ],
+        )
+        raw = resp.choices[0].message.content.strip()
+        fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+        if fence_match:
+            raw = fence_match.group(1).strip()
+        questions = json.loads(raw)
+        if isinstance(questions, list) and all(isinstance(q, str) for q in questions):
+            logger.info("Follow-up questions generated: %s", questions)
+            return questions[:3]
+    except Exception as e:
+        logger.warning("Follow-up question generation failed (non-fatal): %s", e)
+
+    return [
+        "How does this compare to other months?",
+        "Can you break this down further?",
+        "What is driving this result?",
+    ]
+
 
 def _generate_sql_candidates(message: str, schema: str, n: int = TOT_NUM_CANDIDATES) -> list[str]:
     #TOT branch step: generate N distinct SQL candidates in a single call
@@ -420,7 +484,10 @@ def get_data_chat_response(message: str) -> dict:
         chart_data = _generate_chart_data(message, sql, rows)
         logger.info("Chart data generated: %s", "yes" if chart_data else "no")
 
-        return {"text": text_reply, "chart_data": chart_data}
+        # Step 5 — generate follow-up questions (non-blocking; uses fallback on failure)
+        follow_up_questions = _generate_follow_up_questions(message, text_reply)
+
+        return {"text": text_reply, "chart_data": chart_data, "follow_up_questions": follow_up_questions}
 
     except Exception as e:
         logger.exception("get_data_chat_response failed: %s", e)
