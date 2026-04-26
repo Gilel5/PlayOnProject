@@ -17,8 +17,8 @@ import {
 
 import Sidebar from "../components/Sidebar";
 import ChatArea from "../components/ChatArea";
-import RightPanel from "../components/RightPanel";
 import SettingsModal from "../components/SettingsModal";
+import { Sparkles, X } from "lucide-react";
 import { uploadCsv } from "../api/upload";
 
 
@@ -27,8 +27,8 @@ export default function AppHome() {
 
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [summarySessionId, setSummarySessionId] = useState(null);
   const [activeChat, setActiveChat] = useState("New Chat");
   const [input, setInput] = useState("");
   const [files, setFiles] = useState([]);
@@ -42,15 +42,6 @@ export default function AppHome() {
 
   const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
 
-  function buildFollowUpQuestions(reply) {
-    if (!reply) return null;
-
-    return [
-      "How does this compare to other months?",
-      "What is the impact of this?",
-      "What is notable about this?",
-    ];
-  }
 
   async function getAccessToken() {
     const existing = sessionStorage.getItem("access_token");
@@ -152,7 +143,7 @@ export default function AppHome() {
     try {
       // Send the message to the backend along with the session ID
       const response = await sendChatMessage(text, currentChatId);
-      const followUpQuestions = response.followUpQuestions || response.follow_up_questions || buildFollowUpQuestions(response.reply, text);
+      const followUpQuestions = response.follow_up_questions || null;
       const botMessage = {
         id: Date.now() + 1,
         role: "bot",
@@ -335,6 +326,10 @@ export default function AppHome() {
     }
   }
 
+  function handleViewSummary(sessionId) {
+    setSummarySessionId(sessionId || activeChatId);
+  }
+
   async function handleClearChat() {
     if (!activeChatId) return;
     try {
@@ -392,6 +387,7 @@ export default function AppHome() {
           onArchiveChat={handleArchiveChat}
           onClose={() => setSidebarOpen(false)}
           onSettingsOpen={() => setShowSettings(true)}
+          onViewSummary={handleViewSummary}
         />
       )}
 
@@ -406,22 +402,50 @@ export default function AppHome() {
         isLoading={loadingChats[activeChatId] || false}
         sidebarOpen={sidebarOpen}
         onSidebarOpen={() => setSidebarOpen(true)}
-        rightPanelOpen={rightPanelOpen}
-        onRightPanelToggle={() => setRightPanelOpen((prev) => !prev)}
         onUploadCsv={handleUploadCsv}
         uploadStatus={uploadStatus}
         onCancelUpload={handleCancelUpload}
         onClearChat={handleClearChat}
+        onViewSummary={() => handleViewSummary(activeChatId)}
         datasource={datasource}
       />
 
-      {rightPanelOpen && (
-        <RightPanel
-          onClose={() => setRightPanelOpen(false)}
-          summary={activeSession?.chat_summary}
-        />
-      )}
-
+      {summarySessionId && (() => {
+        const summarySession = sessions.find((s) => s.id === summarySessionId) || activeSession;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className={`relative rounded-2xl shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[80vh] ${darkMode ? "bg-slate-900 text-white border border-slate-700" : "bg-white text-gray-900 border border-gray-200"}`}>
+              {/* Header */}
+              <div className={`flex items-center justify-between px-5 py-4 border-b shrink-0 ${darkMode ? "border-slate-700" : "border-gray-100"}`}>
+                <div className="flex items-center gap-2">
+                  <Sparkles size={16} className={darkMode ? "text-cyan-300" : "text-cyan-600"} />
+                  <span className="font-semibold text-sm">
+                    {summarySession?.chat_title || "Chat Summary"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSummarySessionId(null)}
+                  className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-700 text-slate-300" : "hover:bg-gray-100 text-gray-500"}`}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              {/* Body */}
+              <div className="overflow-y-auto px-5 py-4">
+                {summarySession?.chat_summary ? (
+                  <p className={`text-sm leading-7 whitespace-pre-wrap ${darkMode ? "text-slate-300" : "text-gray-700"}`}>
+                    {summarySession.chat_summary}
+                  </p>
+                ) : (
+                  <p className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+                    No summary yet. Send a few messages and a summary will be generated automatically.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {showSettings && (
         <SettingsModal
