@@ -1,11 +1,12 @@
 import { useRef, useState, useEffect, useContext } from "react";
 import { DarkModeContext } from "./DarkModeContext";
-import { Menu, MoreHorizontal, LayoutTemplate, Paperclip, ArrowUp, BarChart3, Database, ChevronDown } from "lucide-react";
+import { Menu, MoreHorizontal, Paperclip, ArrowUp, BarChart3, Database, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { generateSummaryReports } from "../api/chat";
 import { getUploadedFiles } from "../api/upload";
 import UserMessage from "./messages/UserMessage";
 import BotMessage from "./messages/BotMessage";
+import FollowUpQuestions from "./messages/FollowUpQuestions";
 import ChartBlock from "./messages/ChartBlock";
 import PdfAttachment from "./PdfAttachment";
 import File from "./File";
@@ -47,12 +48,11 @@ export default function ChatArea({
   isLoading,
   sidebarOpen,
   onSidebarOpen,
-  rightPanelOpen,
-  onRightPanelToggle,
   onUploadCsv,
   uploadStatus, // null | {phase: 'uploading', percent, loaded, total, startedAt} | {phase: 'processing'} | {rows_inserted, table} | {error}
   onCancelUpload,
   onClearChat,
+  onViewSummary,
   datasource,
 }) {
   const messagesEndRef = useRef(null);
@@ -460,6 +460,16 @@ export default function ChatArea({
     }, 100);
   }
 
+  const STARTER_QUESTIONS = [
+    "Which pass type generates the most revenue?",
+    "How does monthly revenue trend over time?",
+    "What is the refund rate by transaction type?",
+    "Which month had the highest number of new purchases?",
+    "How much revenue came from Annual vs Month passes?",
+  ];
+
+  const isEmptyChat = messages.length <= 1;
+
   return (
     <div className={`flex-1 flex flex-col min-w-0 ${darkMode ? "bg-black text-white" : "bg-white text-gray-900"}`}>
       {/* Top bar */}
@@ -535,14 +545,6 @@ export default function ChatArea({
           >
             <MoreHorizontal size={18} className={darkMode ? "text-slate-200" : "text-black"} />
           </button>
-          {!rightPanelOpen && (
-            <button
-              onClick={onRightPanelToggle}
-              className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
-            >
-              <LayoutTemplate size={18} className={darkMode ? "text-slate-200" : "text-gray-600"} />
-            </button>
-          )}
         </div>
       </div>
 
@@ -560,6 +562,17 @@ export default function ChatArea({
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
           )
+        )}
+        {isEmptyChat && !isLoading && (
+          <div className="mt-6">
+            <p className={`text-xs mb-3 ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+              Suggested questions to get started:
+            </p>
+            <FollowUpQuestions
+              questions={STARTER_QUESTIONS}
+              onSelectQuestion={handleFollowUpQuestion}
+            />
+          </div>
         )}
         {isLoading && (
           <BotMessage>
@@ -730,6 +743,12 @@ export default function ChatArea({
           style={{ position: "fixed", top: menuPosition.top, right: menuPosition.right }}
           className={`w-36 rounded shadow-lg z-50 ${darkMode ? "bg-slate-900 border border-slate-700" : "bg-white border border-gray-200"}`}
         >
+          <button
+            onClick={() => { onViewSummary(); setOpenMenu(null); }}
+            className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
+          >
+            View Summary
+          </button>
           <button
             onClick={() => { setShowClearConfirm(true); setOpenMenu(null); }}
             className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}

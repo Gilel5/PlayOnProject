@@ -43,14 +43,29 @@ Return ONLY valid JSON with exactly these keys:
   "summary": "string"
 }
 
-Rules:
-- title must be concise, specific, and 3 to 7 words
-- do not use generic titles like "New Chat", "Conversation", or "Financial Data Chat"
-- summary must be 1 to 3 sentences
-- summary must stay under 80 words
-- mention the main user goal, dataset, report, metric, or analysis if clear
-- do not include markdown
-- do not include code fences
+Rules for title:
+- Must be concise, specific, and 3 to 7 words
+- Do not use generic titles like "New Chat", "Conversation", or "Financial Data Chat"
+
+Rules for summary:
+- Write a detailed, insight-focused summary of 150 to 250 words
+- Structure it in clearly separated sections using plain text (no markdown, no code fences)
+- Include the following sections where applicable:
+
+  OVERVIEW: One or two sentences describing what the user was investigating.
+
+  KEY INSIGHTS: Bullet points (use a dash "-") listing the most important findings,
+  specific numbers, comparisons, or trends discovered. Include actual figures from
+  the conversation (e.g. revenue totals, top performers, anomalies).
+
+  NOTABLE PATTERNS: Any trends, anomalies, or comparisons surfaced during the session
+  (e.g. month-over-month changes, pass type performance differences, outlier months).
+
+  NEXT STEPS: 1 to 2 recommendations or natural next questions based on what was learned.
+
+- Use plain text only. No markdown headers, no asterisks, no code fences.
+- Write in present tense ("Revenue shows...", "The data reveals...").
+- Be specific — reference actual values, dates, and categories from the conversation.
 """
 
 
