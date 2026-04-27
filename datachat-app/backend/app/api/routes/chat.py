@@ -1,6 +1,8 @@
 import asyncio
 import io
 from concurrent.futures import ThreadPoolExecutor
+import logging
+import traceback
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
@@ -17,6 +19,7 @@ from app.models.chat_session import ChatSession
 from app.models.chat_messages import ChatMessage
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 # Thread pool for CPU/IO-bound work so we don't block the event loop
 _executor = ThreadPoolExecutor(max_workers=4)
@@ -26,6 +29,12 @@ class ChatRequest(BaseModel):
     message: str
     session_id: Optional[uuid.UUID] = None
 
+class SummaryReportRequest(BaseModel):
+    report_type: str
+    year: Optional[int] = None
+    month: Optional[str] = None
+    start_month: Optional[str] = None
+    end_month: Optional[str] = None
 
 @router.get("/datasource")
 def get_datasource():
@@ -100,15 +109,42 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
 # Summary report -> downloadable Excel file
 @router.post("/summary")
-async def summary():
-    """Generate a 3-sheet Excel workbook from the finance database."""
+async def summary(request: SummaryReportRequest):
+    """Generate an Excel workbook based on annual, single-month, or multi-month report selection."""
     try:
+        logger.error(
+            "Summary request received: report_type=%s year=%s month=%s start_month=%s end_month=%s",
+            request.report_type,
+            request.year,
+            request.month,
+            request.start_month,
+            request.end_month,
+        )
+
         loop = asyncio.get_event_loop()
-        xlsx_bytes = await loop.run_in_executor(_executor, generate_summary_reports)
+        xlsx_bytes = await loop.run_in_executor(
+            _executor,
+            generate_summary_reports,
+            request.report_type,
+            request.year,
+            request.month,
+            request.start_month,
+            request.end_month,
+        )
+
+        filename = "summary_reports.xlsx"
+        if request.report_type == "annual" and request.year:
+            filename = f"annual_summary_{request.year}.xlsx"
+        elif request.report_type == "single_month" and request.month:
+            filename = f"monthly_summary_{request.month}.xlsx"
+        elif request.report_type == "multimonth" and request.start_month and request.end_month:
+            filename = f"multimonth_summary_{request.start_month}_to_{request.end_month}.xlsx"
+
         return StreamingResponse(
             io.BytesIO(xlsx_bytes),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=summary_reports.xlsx"},
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except Exception as e:
+        logger.exception("Detailed summary report failure")
         raise HTTPException(status_code=500, detail=f"Report generation error: {str(e)}")
