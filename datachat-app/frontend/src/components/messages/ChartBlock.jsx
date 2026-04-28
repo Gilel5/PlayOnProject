@@ -1,4 +1,4 @@
-import { useState, useContext, useCallback } from "react";
+import { useState, useContext, useCallback, useId } from "react";
 import { DarkModeContext } from "../DarkModeContext";
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
@@ -231,6 +231,7 @@ function SingleChart({ chartType, chartData, darkMode, colors, id }) {
 export default function ChartBlock({ chartData }) {
   const { darkMode } = useContext(DarkModeContext);
   const colors = darkMode ? DARK_COLORS : LIGHT_COLORS;
+  const blockId = useId().replace(/:/g, ""); // Create a globally unique ID for this block
 
   // Charts state: array of { id, type } — start with the default chart
   const [charts, setCharts] = useState([
@@ -315,7 +316,7 @@ export default function ChartBlock({ chartData }) {
               chartData={chartData}
               darkMode={darkMode}
               colors={colors}
-              id={`${chart.id}-${chart.type}`}
+              id={`${blockId}-${chart.id}-${chart.type}`}
             />
           </div>
         </div>

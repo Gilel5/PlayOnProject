@@ -1,6 +1,6 @@
 import { Menu, Plus, Search, Settings, User, MoreHorizontal } from "lucide-react";
 import { useState, useEffect, useRef, useContext } from "react";
-import { DarkModeContext } from "./DarkModeContext";
+import { DarkModeContext } from "../DarkModeContext";
 
 
 export default function Sidebar({

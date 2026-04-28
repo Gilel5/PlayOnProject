@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useContext } from "react";
-import { DarkModeContext } from "./DarkModeContext";
+import { DarkModeContext } from "../DarkModeContext";
 
 export default function File({ label, onRemove }) {
   const { darkMode } = useContext(DarkModeContext);

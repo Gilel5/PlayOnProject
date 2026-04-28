@@ -15,9 +15,9 @@ import {
   clearSessionMessages,
 } from "../api/chatSessions";
 
-import Sidebar from "../components/Sidebar";
-import ChatArea from "../components/ChatArea";
-import SettingsModal from "../components/SettingsModal";
+import Sidebar from "../components/layout/Sidebar";
+import ChatArea from "../components/chat/ChatArea";
+import SettingsModal from "../components/modals/SettingsModal";
 import { Sparkles, X } from "lucide-react";
 import { uploadCsv } from "../api/upload";
 
@@ -40,9 +40,17 @@ export default function AppHome() {
   const [datasource, setDatasource] = useState(null);
   const abortControllerRef = useRef(null);
 
+  /** 
+   * Initial greeting injected into new or empty chat sessions.
+   * Not saved to the database; it's a client-side display convenience.
+   */
   const WELCOME_MESSAGE = {id: 0, role: "bot", text: "Hello! I'm your data chat assistant. How can I help you today?"};
 
 
+  /**
+   * Return the current access token from session storage, or fetch a new one
+   * if it's missing (e.g. on hard refresh) by exchanging the HttpOnly refresh cookie.
+   */
   async function getAccessToken() {
     const existing = sessionStorage.getItem("access_token");
     if (existing) return existing;
@@ -61,6 +69,10 @@ export default function AppHome() {
         setSessions(userSessions);
         if (userSessions.length > 0) {
           setActiveChatId(userSessions[0].id);
+        } else {
+          const newSession = await createChatSession(u.id);
+          setSessions([newSession]);
+          setActiveChatId(newSession.id);
         }
         getDatasource().then((d) => setDatasource(d.table)).catch(() => {});
       } catch {
@@ -99,9 +111,7 @@ export default function AppHome() {
     }
   }
 
-  async function OnDelete() {
-    
-  }
+
 
   async function handleChangeName(newName) {
     const token = await getAccessToken();

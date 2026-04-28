@@ -1,6 +1,6 @@
 import { Upload } from "lucide-react";
 import { useContext } from "react";
-import { DarkModeContext } from "./DarkModeContext";
+import { DarkModeContext } from "../DarkModeContext";
 
 export default function UploadProgress({ progress, onCancel }) {
   const { darkMode } = useContext(DarkModeContext);

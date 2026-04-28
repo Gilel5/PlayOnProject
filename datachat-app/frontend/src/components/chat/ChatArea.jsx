@@ -1,42 +1,46 @@
 import { useRef, useState, useEffect, useContext } from "react";
-import { DarkModeContext } from "./DarkModeContext";
+import { DarkModeContext } from "../DarkModeContext";
 import { Menu, MoreHorizontal, Paperclip, ArrowUp, BarChart3, Database, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { generateSummaryReports } from "../api/chat";
-import { getUploadedFiles } from "../api/upload";
-import UserMessage from "./messages/UserMessage";
-import BotMessage from "./messages/BotMessage";
-import FollowUpQuestions from "./messages/FollowUpQuestions";
-import ChartBlock from "./messages/ChartBlock";
+import { generateSummaryReports } from "../../api/chat";
+import { getUploadedFiles } from "../../api/upload";
+import UserMessage from "../messages/UserMessage";
+import BotMessage from "../messages/BotMessage";
+import FollowUpQuestions from "../messages/FollowUpQuestions";
+import ChartBlock from "../messages/ChartBlock";
 import PdfAttachment from "./PdfAttachment";
 import File from "./File";
 import remarkGfm from "remark-gfm";
 
-function formatFlattenedTable(text) {
-  if (!text) return text;
-  // Dynamic intercept: if the generated string has markdown pipes squashed (no physical \n detected)
-  if (text.includes('|---|') && !text.includes('\n|')) {
-    // Regex inject physical layout breaks bridging all valid trailing/leading pipes
-    return text.replace(/\|\s+(?=\|)/g, '|\n');
-  }
-  return text;
-}
+// New extracted components and utilities
+import ReportModal from "../modals/ReportModal";
+import UploadStatusBar from "./UploadStatusBar";
+import { formatFlattenedTable } from "../../utils/formatters";
 
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
-function formatTime(seconds) {
-  if (!isFinite(seconds) || seconds < 0) return "—";
-  if (seconds < 60) return `${Math.ceil(seconds)}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.ceil(seconds % 60);
-  return `${mins}m ${secs}s`;
-}
-
+/**
+ * Main chat interface component.
+ * 
+ * Manages the message list rendering, text input, file attachments, and context menus.
+ * Delegates report generation and upload progress to sub-components.
+ * 
+ * @param {Object} props
+ * @param {Array} props.messages - Array of message objects to render.
+ * @param {string} props.activeChatTitle - Title of the current chat.
+ * @param {string} props.input - Current text input value.
+ * @param {Function} props.setInput - State setter for input.
+ * @param {Array} props.files - List of attached files.
+ * @param {Function} props.removeFile - Callback to remove an attached file.
+ * @param {Function} props.sendMessage - Callback to send a message.
+ * @param {boolean} props.isLoading - Whether the bot is currently thinking.
+ * @param {boolean} props.sidebarOpen - Whether the sidebar is open.
+ * @param {Function} props.onSidebarOpen - Callback to open the sidebar.
+ * @param {Function} props.onUploadCsv - Callback when a CSV is selected for upload.
+ * @param {Object|null} props.uploadStatus - Current status of the CSV upload.
+ * @param {Function} props.onCancelUpload - Callback to cancel the current upload.
+ * @param {Function} props.onClearChat - Callback to clear the current chat messages.
+ * @param {Function} props.onViewSummary - Callback to view the chat summary.
+ * @param {string|null} props.datasource - The name of the active datasource.
+ */
 export default function ChatArea({
   messages,
   activeChatTitle,
@@ -49,7 +53,7 @@ export default function ChatArea({
   sidebarOpen,
   onSidebarOpen,
   onUploadCsv,
-  uploadStatus, // null | {phase: 'uploading', percent, loaded, total, startedAt} | {phase: 'processing'} | {rows_inserted, table} | {error}
+  uploadStatus,
   onCancelUpload,
   onClearChat,
   onViewSummary,
@@ -71,36 +75,21 @@ export default function ChatArea({
   const [dsDropdownOpen, setDsDropdownOpen] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState(null);
   const dsDropdownRef = useRef(null);
+  
+  // Modal state
   const [showReportModal, setShowReportModal] = useState(false);
-  const [reportType, setReportType] = useState("annual");
-  const [reportYear, setReportYear] = useState(String(new Date().getFullYear()));
-  const [reportMonthValue, setReportMonthValue] = useState("01");
-  const [reportMonthYear, setReportMonthYear] = useState(String(new Date().getFullYear()));
-  const [multiStartMonthValue, setMultiStartMonthValue] = useState("01");
-  const [multiStartMonthYear, setMultiStartMonthYear] = useState(String(new Date().getFullYear()));
-  const [multiEndMonthValue, setMultiEndMonthValue] = useState("12");
-  const [multiEndMonthYear, setMultiEndMonthYear] = useState(String(new Date().getFullYear()));
     
-  async function handleGenerateReports() {
+  async function handleGenerateReports(reportType, params) {
     try {
       setIsGeneratingReports(true);
 
-      let payload = {
+      const payload = {
         reportType,
-        year: null,
-        month: null,
-        startMonth: null,
-        endMonth: null,
+        year: params.year || null,
+        month: params.month || null,
+        startMonth: params.start_month || null,
+        endMonth: params.end_month || null,
       };
-
-      if (reportType === "annual") {
-        payload.year = Number(reportYear);
-      } else if (reportType === "single_month") {
-        payload.month = `${reportMonthYear}-${reportMonthValue}`;
-      } else if (reportType === "multimonth") {
-        payload.startMonth = `${multiStartMonthYear}-${multiStartMonthValue}`;
-        payload.endMonth = `${multiEndMonthYear}-${multiEndMonthValue}`;
-      }
 
       console.log("REPORT PAYLOAD", payload);
 
@@ -110,7 +99,7 @@ export default function ChatArea({
       a.href = url;
 
       if (reportType === "annual") {
-        a.download = `Annual_Summary_${reportYear}.xlsx`;
+        a.download = `Annual_Summary_${payload.year}.xlsx`;
       } else if (reportType === "single_month") {
         a.download = `Monthly_Summary_${payload.month}.xlsx`;
       } else {
@@ -429,7 +418,7 @@ export default function ChatArea({
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-    };
+    }
   }, [openMenu]);
 
   // Open the context menu — calculate fixed position from the button's location
@@ -597,8 +586,8 @@ export default function ChatArea({
           ) : (
             <BotMessage key={msg.id} followUpQuestions={msg.followUpQuestions} onSelectFollowUp={handleFollowUpQuestion} rawText={msg.text}>
               <div className={`prose prose-sm max-w-none transition-colors prose-table:w-full prose-td:border prose-td:border-gray-300 prose-th:border prose-th:border-gray-300 prose-td:px-2 prose-td:py-1 prose-th:px-2 prose-th:py-1 ${darkMode ? "prose-invert prose-headings:text-white prose-p:text-slate-100 prose-strong:text-white prose-li:text-slate-100" : "prose-headings:text-gray-900 prose-p:text-gray-800 prose-strong:text-gray-900 prose-li:text-gray-800"}`}>
-  <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatFlattenedTable(msg.text)}</ReactMarkdown>
-</div>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{formatFlattenedTable(msg.text)}</ReactMarkdown>
+              </div>
               {msg.chart_data && <span data-msg-id={msg.id}><ChartBlock chartData={msg.chart_data} /></span>}
               {msg.attachment && <PdfAttachment name={msg.attachment} />}
             </BotMessage>
@@ -628,88 +617,11 @@ export default function ChatArea({
 
       {/* Input area */}
       <div className="px-6 pb-6 pt-2">
-        {/* Upload status banners */}
-        {uploadStatus?.phase === "uploading" && (
-          <div className={`mb-2 px-1 text-xs ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
-              <span>Uploading CSV… {uploadStatus.percent}%</span>
-              <span className={darkMode ? "text-slate-400" : "text-gray-400"}>
-                ({formatBytes(uploadStatus.loaded)} / {formatBytes(uploadStatus.total)}
-                {(() => {
-                  const elapsed = (Date.now() - uploadStatus.startedAt) / 1000;
-                  if (elapsed < 0.5 || uploadStatus.loaded === 0) return "";
-                  const bps = uploadStatus.loaded / elapsed;
-                  const remainingBytes = uploadStatus.total - uploadStatus.loaded;
-                  const eta = remainingBytes / bps;
-                  return ` • ${formatBytes(bps)}/s • ${formatTime(eta)} left`;
-                })()}
-                )
-              </span>
-              <button
-                onClick={onCancelUpload}
-                className="ml-1 text-red-400 hover:text-red-600 underline"
-              >
-                Cancel
-              </button>
-            </div>
-            <div className={`mt-1 h-1 rounded-full overflow-hidden ${darkMode ? "bg-slate-800" : "bg-gray-200"}`}>
-              <div
-                className="h-full bg-[#5BC5D0] transition-all duration-200"
-                style={{ width: `${uploadStatus.percent}%` }}
-              />
-            </div>
-          </div>
-        )}
-        {uploadStatus?.phase === "processing" && (() => {
-          const { rows_processed = 0, total_rows = 0, serverPhase, startedAt } = uploadStatus;
-          const percent = total_rows > 0 ? Math.min(100, Math.round((rows_processed * 100) / total_rows)) : 0;
-          const phaseLabel =
-            serverPhase === "queued" ? "Queued (waiting for a DB slot)…" :
-              serverPhase === "validating" ? "Validating columns…" :
-                serverPhase === "finalizing" ? "Finalizing insert…" :
-                  serverPhase === "inserting" ? "Inserting rows…" :
-                    "Processing…";
-          const elapsed = startedAt ? (Date.now() - startedAt) / 1000 : 0;
-          const rps = elapsed > 0.5 && rows_processed > 0 ? rows_processed / elapsed : 0;
-          const eta = rps > 0 && total_rows > rows_processed ? (total_rows - rows_processed) / rps : null;
-          return (
-            <div className={`mb-2 px-1 text-xs ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 border-2 border-[#5BC5D0] border-t-transparent rounded-full animate-spin" />
-                <span>{phaseLabel} {total_rows > 0 && `${percent}%`}</span>
-                {total_rows > 0 && (
-                  <span className={darkMode ? "text-slate-400" : "text-gray-400"}>
-                    ({rows_processed.toLocaleString()} / {total_rows.toLocaleString()} rows
-                    {eta !== null && ` • ${formatTime(eta)} left`}
-                    )
-                  </span>
-                )}
-              </div>
-              {total_rows > 0 && (
-                <div className={`mt-1 h-1 rounded-full overflow-hidden ${darkMode ? "bg-slate-800" : "bg-gray-200"}`}>
-                  <div
-                    className="h-full bg-[#5BC5D0] transition-all duration-200"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })()}
-        {uploadStatus?.rows_inserted != null && (
-          <div className={`mb-2 px-1 text-xs ${uploadStatus.rows_inserted === 0 ? (darkMode ? "text-yellow-400" : "text-yellow-600") : "text-green-600"}`}>
-            {uploadStatus.rows_inserted === 0
-              ? uploadStatus.message || "No new rows were added."
-              : <>✓ {uploadStatus.rows_inserted.toLocaleString()} rows added to <strong>{uploadStatus.table}</strong>
-                {uploadStatus.message && <span className={darkMode ? " text-yellow-400" : " text-yellow-600"}> ({uploadStatus.message})</span>}
-              </>
-            }
-          </div>
-        )}
-        {uploadStatus?.error && (
-          <div className="mb-2 px-1 text-xs text-red-500">{uploadStatus.error}</div>
-        )}
+        <UploadStatusBar
+          uploadStatus={uploadStatus}
+          darkMode={darkMode}
+          onCancelUpload={onCancelUpload}
+        />
 
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2 px-1">
@@ -800,260 +712,21 @@ export default function ChatArea({
             onClick={handleExportChat}
             className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
           >
-            Export as TXT
+            Export to TXT
           </button>
           <button
             onClick={handleExportPdf}
             className={`w-full text-left px-3 py-1.5 text-sm ${darkMode ? "hover:bg-slate-800 text-slate-100" : "hover:bg-gray-100"}`}
           >
-            Export as PDF
+            Export to PDF
           </button>
         </div>
       )}
 
-
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div
-            className={`rounded-xl shadow-lg p-5 w-96 ${
-              darkMode ? "bg-slate-800 text-white" : "bg-white text-gray-900"
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-sm font-medium mb-4">Generate Report</p>
-
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setReportType("annual")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm ${
-                  reportType === "annual"
-                    ? "bg-[#5BC5D0] text-black"
-                    : darkMode
-                      ? "bg-slate-700 text-slate-200"
-                      : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                Annual
-              </button>
-              <button
-                onClick={() => setReportType("single_month")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm ${
-                  reportType === "single_month"
-                    ? "bg-[#5BC5D0] text-black"
-                    : darkMode
-                      ? "bg-slate-700 text-slate-200"
-                      : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                Single Month
-              </button>
-              <button
-                onClick={() => setReportType("multimonth")}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm ${
-                  reportType === "multimonth"
-                    ? "bg-[#5BC5D0] text-black"
-                    : darkMode
-                      ? "bg-slate-700 text-slate-200"
-                      : "bg-gray-100 text-gray-700"
-                }`}
-              >
-                Multi-Month
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {reportType === "annual" && (
-                <div>
-                  <label className="block text-sm mb-2">Year</label>
-                  <input
-                    type="number"
-                    min="2000"
-                    max="2100"
-                    value={reportYear}
-                    onChange={(e) => setReportYear(e.target.value)}
-                    className={`w-full rounded-lg px-3 py-2 text-sm border ${
-                      darkMode
-                        ? "bg-slate-900 border-slate-700 text-white"
-                        : "bg-white border-gray-300 text-gray-900"
-                    }`}
-                  />
-                </div>
-              )}
-
-              {reportType === "single_month" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm mb-2">Month</label>
-                    <select
-                      value={reportMonthValue}
-                      onChange={(e) => setReportMonthValue(e.target.value)}
-                      className={`w-full rounded-lg px-3 py-2 text-sm border ${
-                        darkMode
-                          ? "bg-slate-900 border-slate-700 text-white"
-                          : "bg-white border-gray-300 text-gray-900"
-                      }`}
-                    >
-                      <option value="01">January</option>
-                      <option value="02">February</option>
-                      <option value="03">March</option>
-                      <option value="04">April</option>
-                      <option value="05">May</option>
-                      <option value="06">June</option>
-                      <option value="07">July</option>
-                      <option value="08">August</option>
-                      <option value="09">September</option>
-                      <option value="10">October</option>
-                      <option value="11">November</option>
-                      <option value="12">December</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm mb-2">Year</label>
-                    <input
-                      type="number"
-                      min="2000"
-                      max="2100"
-                      value={reportMonthYear}
-                      onChange={(e) => setReportMonthYear(e.target.value)}
-                      className={`w-full rounded-lg px-3 py-2 text-sm border ${
-                        darkMode
-                          ? "bg-slate-900 border-slate-700 text-white"
-                          : "bg-white border-gray-300 text-gray-900"
-                      }`}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {reportType === "multimonth" && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm mb-2">Start Month</label>
-                      <select
-                        value={multiStartMonthValue}
-                        onChange={(e) => setMultiStartMonthValue(e.target.value)}
-                        className={`w-full rounded-lg px-3 py-2 text-sm border ${
-                          darkMode
-                            ? "bg-slate-900 border-slate-700 text-white"
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      >
-                        <option value="01">January</option>
-                        <option value="02">February</option>
-                        <option value="03">March</option>
-                        <option value="04">April</option>
-                        <option value="05">May</option>
-                        <option value="06">June</option>
-                        <option value="07">July</option>
-                        <option value="08">August</option>
-                        <option value="09">September</option>
-                        <option value="10">October</option>
-                        <option value="11">November</option>
-                        <option value="12">December</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm mb-2">Start Year</label>
-                      <input
-                        type="number"
-                        min="2000"
-                        max="2100"
-                        value={multiStartMonthYear}
-                        onChange={(e) => setMultiStartMonthYear(e.target.value)}
-                        className={`w-full rounded-lg px-3 py-2 text-sm border ${
-                          darkMode
-                            ? "bg-slate-900 border-slate-700 text-white"
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm mb-2">End Month</label>
-                      <select
-                        value={multiEndMonthValue}
-                        onChange={(e) => setMultiEndMonthValue(e.target.value)}
-                        className={`w-full rounded-lg px-3 py-2 text-sm border ${
-                          darkMode
-                            ? "bg-slate-900 border-slate-700 text-white"
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      >
-                        <option value="01">January</option>
-                        <option value="02">February</option>
-                        <option value="03">March</option>
-                        <option value="04">April</option>
-                        <option value="05">May</option>
-                        <option value="06">June</option>
-                        <option value="07">July</option>
-                        <option value="08">August</option>
-                        <option value="09">September</option>
-                        <option value="10">October</option>
-                        <option value="11">November</option>
-                        <option value="12">December</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm mb-2">End Year</label>
-                      <input
-                        type="number"
-                        min="2000"
-                        max="2100"
-                        value={multiEndMonthYear}
-                        onChange={(e) => setMultiEndMonthYear(e.target.value)}
-                        className={`w-full rounded-lg px-3 py-2 text-sm border ${
-                          darkMode
-                            ? "bg-slate-900 border-slate-700 text-white"
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 mt-5">
-              <button
-                onClick={() => setShowReportModal(false)}
-                className={`px-3 py-1.5 text-sm rounded-lg ${
-                  darkMode ? "hover:bg-slate-700 text-slate-200" : "hover:bg-gray-100 text-gray-600"
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateReports}
-                disabled={
-                  isGeneratingReports ||
-                  (reportType === "annual" && !reportYear) ||
-                  (reportType === "single_month" && (!reportMonthValue || !reportMonthYear)) ||
-                  (reportType === "multimonth" &&
-                    (!multiStartMonthValue || !multiStartMonthYear || !multiEndMonthValue || !multiEndMonthYear))
-                }
-                className="px-3 py-1.5 text-sm rounded-lg bg-[#5BC5D0] text-black hover:opacity-90 disabled:opacity-50"
-              >
-                {isGeneratingReports ? "Generating..." : "Download"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Clear confirmation modal */}
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className={`rounded-xl shadow-lg p-5 w-72 ${darkMode ? "bg-slate-800 text-white" : "bg-white text-gray-900"}`} onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-medium mb-1">Clear Chat</p>
-            <p className={`text-sm mb-4 ${darkMode ? "text-slate-300" : "text-gray-500"}`}>
-              Are you sure you want to clear <strong>{activeChatTitle || "this chat"}</strong>? All messages will be permanently removed.
-            </p>
+          <div className={`rounded-xl shadow-lg p-5 w-80 ${darkMode ? "bg-slate-800 text-white" : "bg-white text-gray-900"}`}>
+            <p className="text-sm font-medium mb-4">Are you sure you want to clear this chat?</p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowClearConfirm(false)}
@@ -1062,7 +735,10 @@ export default function ChatArea({
                 Cancel
               </button>
               <button
-                onClick={() => { onClearChat(); setShowClearConfirm(false); }}
+                onClick={() => {
+                  onClearChat();
+                  setShowClearConfirm(false);
+                }}
                 className="px-3 py-1.5 text-sm rounded-lg bg-red-500 text-white hover:bg-red-600"
               >
                 Clear
@@ -1070,6 +746,15 @@ export default function ChatArea({
             </div>
           </div>
         </div>
+      )}
+
+      {showReportModal && (
+        <ReportModal
+          darkMode={darkMode}
+          onClose={() => setShowReportModal(false)}
+          onGenerate={handleGenerateReports}
+          isGenerating={isGeneratingReports}
+        />
       )}
     </div>
   );

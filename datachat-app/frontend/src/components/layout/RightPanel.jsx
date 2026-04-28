@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { LayoutTemplate, ExternalLink, Sparkles } from "lucide-react";
-import { DarkModeContext } from "./DarkModeContext";
+import { DarkModeContext } from "../DarkModeContext";
 
 const LEGEND = [
   { label: "New Subscriptions", color: "bg-purple-400", pct: "28%" },

@@ -1,3 +1,16 @@
+"""
+OpenAI integration for data-aware chat.
+
+Pipeline (for every user question):
+  1. Fetch the finance table schema (process-level cache after first call).
+  2. Generate SQL via Tree-of-Thought (ToT): branch → evaluate → select.
+     Falls back to single-shot generation when ToT produces < 2 valid candidates.
+  3. Execute the chosen SQL read-only against the finance database.
+  4. Ask GPT to summarise the rows in plain English.
+  5. Ask GPT to produce a Recharts-compatible chart spec (non-blocking).
+  6. Ask GPT to generate 3 contextual follow-up questions (non-blocking).
+"""
+
 import json
 import logging
 import math
@@ -15,16 +28,25 @@ logger = logging.getLogger(__name__)
 
 TABLE = settings.FINANCE_TABLE_NAME
 
-#Setting up Tree of Thought
-TOT_NUM_CANDIDATES = 3 #number of SQL branches to explore
-TOT_ENABLED = True #set to false to revert back to single-shot prompt generation
+# ── Tree-of-Thought configuration ────────────────────────────────────────────
+TOT_NUM_CANDIDATES = 3   # Number of SQL branches to explore per question
+TOT_ENABLED = True       # Set False to revert to single-shot SQL generation
 
-# Schema helper -> one query, cached for the lifetime of the process
+# ── Schema cache ─────────────────────────────────────────────────────────────
+# The schema is fetched once per process and reused for every request.
+# This avoids a round-trip to information_schema on every user message.
+# If the schema changes, restart the server to invalidate the cache.
 _CACHED_SCHEMA: str | None = None
 
 
 def get_table_schema() -> str:
-    """Return a concise description of every column in the finance table."""
+    """
+    Return a concise description of every column in the finance table.
+
+    Queries information_schema on the first call and caches the result
+    in-process so subsequent calls are free. Thread-safe for read-only
+    access; the GIL protects the single assignment to _CACHED_SCHEMA.
+    """
     global _CACHED_SCHEMA
     if _CACHED_SCHEMA:
         return _CACHED_SCHEMA
@@ -47,8 +69,9 @@ def get_table_schema() -> str:
     _CACHED_SCHEMA = "\n".join(lines)
     return _CACHED_SCHEMA
 
-# Original simple chat (no data context)
+
 def get_chat_response(message: str) -> str:
+    """Simple, schema-free GPT response — used for non-data questions."""
     completion = client.chat.completions.create(
         model="gpt-5.4",
         messages=[{"role": "user", "content": message}],
@@ -56,11 +79,10 @@ def get_chat_response(message: str) -> str:
     return completion.choices[0].message.content
 
 
-# Data-aware chat with two-step SQL generation
-_SQL_SYSTEM_PROMPT = """\
-You are a SQL assistant. Given a user question and a PostgreSQL table schema,
-write a single SELECT query that answers the question.
-
+# ── Shared SQL rules injected into both SQL generation prompts ────────────────
+# Keeping these in one place means a single edit propagates to both the
+# single-shot fallback and the ToT branch generator automatically.
+_SQL_RULES = """\
 Rules:
 - Return ONLY the raw SQL, no markdown fences, no explanation.
 - Use only columns that exist in the schema.
@@ -88,43 +110,26 @@ Rules:
 - If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
 """
 
-_TOT_SQL_CANDIDATES_PROMPT = """\
-    You are a SQL expert. Given a user question and a PostgreSQL schema,
-    produce {n} DISTINCT SQL SELECT queries that each attempt to answer the question
-    from a different angle or with a different interpretation.
+# ── System prompts ────────────────────────────────────────────────────────────
 
-    Schema Rules:
-    - Return ONLY the raw SQL, no markdown fences, no explanation.
-    - Use only columns that exist in the schema.
-    - Always reference the table as: {table}
-    - Limit results to 200 rows max unless the user explicitly asks for more.
-    - For monetary values, the columns base_amount and retail_amount are numeric (doubles).
-    - processor_fee is stored as TEXT; cast to NUMERIC when doing math with it.
-    - transaction_date is a timestamptz column.
-    - processor_transaction_type has values: Charge, Dispute, Fee, Refund
-    - transaction_type has values: New Purchase, Rebill, and various fee/radar types.
-    - pass_name has values: Month, Annual, Media, Season, and others.
-    - Use EXTRACT or DATE_TRUNC for date-based grouping.
-    - Never use DELETE, UPDATE, INSERT, DROP, ALTER, TRUNCATE, or CREATE.
-    - Numeric columns (base_amount, retail_amount) may contain NaN stored as the text
-    string 'NaN' or as an IEEE 754 NaN float. ALWAYS use the NULLIF cast pattern when
-    reading these columns so non-numeric values are treated as NULL:
-      NULLIF(col::text, 'NaN')::double precision
-    For aggregations wrap that in COALESCE so the result is never NULL:
-      COALESCE(SUM(NULLIF(retail_amount::text, 'NaN')::double precision), 0)
-      COALESCE(SUM(NULLIF(base_amount::text, 'NaN')::double precision), 0)
-    Use this pattern for every reference to base_amount or retail_amount, including
-    SELECT, WHERE, ORDER BY, and GROUP BY clauses.
-    - Always aggregate, group, or filter results so the output is concise (ideally under 50 rows).
-    - Never use SELECT * — always select only the columns relevant to the question.
-    - If the question asks for a list, limit to the most relevant results with ORDER BY and LIMIT.
+_SQL_SYSTEM_PROMPT = (
+    "You are a SQL assistant. Given a user question and a PostgreSQL table schema,\n"
+    "write a single SELECT query that answers the question.\n\n"
+    + _SQL_RULES
+)
 
-    Output format:
-    Return ONLY a vvalid JSON array of {n} SQL strings - no markdown, no explanation.
-    Example: ["SELECT ...", "SELECT ...", "SELECT ..."]
-"""
+_TOT_SQL_CANDIDATES_PROMPT = (
+    "You are a SQL expert. Given a user question and a PostgreSQL schema,\n"
+    "produce {n} DISTINCT SQL SELECT queries that each attempt to answer the question\n"
+    "from a different angle or with a different interpretation.\n\n"
+    "Schema " + _SQL_RULES + "\n"
+    "Output format:\n"
+    "Return ONLY a valid JSON array of {n} SQL strings - no markdown, no explanation.\n"
+    'Example: ["SELECT ...", "SELECT ...", "SELECT ..."]'
+)
 
-# Evaluate Prompt - model acts as a judge, scoring all potential answers comparatively
+# The evaluate prompt asks the model to act as a judge and score all N candidates
+# comparatively. temperature=0 in the call makes the judgment deterministic.
 _TOT_SQL_EVALUATE_PROMPT = """\
 You are a SQL review expert. A user asked a financial data question and {n}
 candidate SQL queries were generated. Pick the BEST one.
@@ -197,8 +202,6 @@ Data rules:
 - If multiple numeric columns exist, create multiple datasets.
 """
 
-
-# Generates contextual follow-up questions based on what the bot just answered.
 _FOLLOW_UP_PROMPT = """\
 You are a financial data analyst assistant. A user asked a question about their
 revenue data and received an answer. Generate exactly 3 concise follow-up questions
@@ -213,8 +216,10 @@ Example: ["How does this compare to last year?", "Which pass type drives this?",
 """
 
 
+# ── SQL utility helpers ───────────────────────────────────────────────────────
+
 def _extract_sql(raw: str) -> str:
-    """Strip optional markdown fencing from GPT output."""
+    """Strip optional markdown code fencing from GPT output (e.g. ```sql ... ```)."""
     match = re.search(r"```(?:sql)?\s*\n?(.*?)```", raw, re.DOTALL)
     if match:
         return match.group(1).strip()
@@ -222,15 +227,45 @@ def _extract_sql(raw: str) -> str:
 
 
 def _validate_sql(sql: str) -> None:
-    """Reject any obviously dangerous SQL."""
+    """
+    Reject SQL containing data-mutating or schema-altering statements.
+
+    Raises ValueError if any forbidden keyword is found. This is a safety
+    guard against prompt injection — the SQL is also executed on a read-only
+    database connection, but rejecting early gives a cleaner error message.
+    """
     forbidden = r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE)\b"
     if re.search(forbidden, sql, re.IGNORECASE):
         raise ValueError("Query contains forbidden statements.")
 
 
+def _strip_json_fence(raw: str) -> str:
+    """
+    Strip markdown JSON fencing from a string if present.
+
+    GPT sometimes wraps JSON responses in ```json ... ``` blocks despite
+    being instructed not to. This helper normalises the output.
+    """
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+    if fence_match:
+        return fence_match.group(1).strip()
+    return raw
+
+
+# ── Chart generation ──────────────────────────────────────────────────────────
+
 def _generate_chart_data(message: str, sql: str, rows: list) -> dict | None:
-    """Ask GPT to produce structured chart JSON from the SQL results.
-    Returns the parsed dict or None if the data isn't chartable."""
+    """
+    Ask GPT to produce a Recharts-compatible chart spec from SQL results.
+
+    Returns the parsed chart dict, or None if:
+    - There are fewer than 2 rows (not enough data for a meaningful chart).
+    - GPT determines the data isn't chartable and returns null.
+    - GPT output fails JSON parsing or schema validation.
+
+    This call is non-blocking in the sense that failures return None and
+    never raise — the rest of the response is always returned to the user.
+    """
     if not rows or len(rows) < 2:
         return None
 
@@ -246,24 +281,20 @@ def _generate_chart_data(message: str, sql: str, rows: list) -> dict | None:
                         f"User question: {message}\n\n"
                         f"SQL used:\n{sql}\n\n"
                         f"Results ({len(rows)} rows):\n"
+                        # Cap at 100 rows so the prompt doesn't balloon
                         f"{json.dumps(rows[:100], default=str, ensure_ascii=True)}"
                     ),
                 },
             ],
         )
-        raw_chart = chart_resp.choices[0].message.content.strip()
-
-        # Strip markdown fences if present
-        fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw_chart, re.DOTALL)
-        if fence_match:
-            raw_chart = fence_match.group(1).strip()
+        raw_chart = _strip_json_fence(chart_resp.choices[0].message.content.strip())
 
         if raw_chart.lower() == "null":
             return None
 
         chart_data = json.loads(raw_chart)
 
-        # Validate basic structure
+        # Validate the required top-level keys before returning
         if not isinstance(chart_data, dict):
             return None
         required_keys = {"chart_type", "labels", "datasets"}
@@ -278,15 +309,21 @@ def _generate_chart_data(message: str, sql: str, rows: list) -> dict | None:
         logger.warning("Chart generation failed (non-fatal): %s", e)
         return None
 
+
+# ── Follow-up question generation ─────────────────────────────────────────────
+
 def _generate_follow_up_questions(user_message: str, bot_reply: str) -> list[str]:
     """
-    Generate 3 contextual follow-up questions based on the conversation turn.
-    Non-blocking — returns a hardcoded fallback list if the call fails so the
-    rest of the response is never held up by this step.
+    Generate 3 contextual follow-up questions for the current conversation turn.
+
+    Truncates bot_reply to 1,000 characters so the prompt stays small.
+    Returns a hardcoded fallback list on any failure — this step must never
+    block or degrade the main chat response.
     """
     try:
         resp = client.chat.completions.create(
             model="gpt-5.4",
+            # Slight temperature for variety across questions without going off-topic
             temperature=0.7,
             messages=[
                 {"role": "system", "content": _FOLLOW_UP_PROMPT},
@@ -299,10 +336,7 @@ def _generate_follow_up_questions(user_message: str, bot_reply: str) -> list[str
                 },
             ],
         )
-        raw = resp.choices[0].message.content.strip()
-        fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
-        if fence_match:
-            raw = fence_match.group(1).strip()
+        raw = _strip_json_fence(resp.choices[0].message.content.strip())
         questions = json.loads(raw)
         if isinstance(questions, list) and all(isinstance(q, str) for q in questions):
             logger.info("Follow-up questions generated: %s", questions)
@@ -310,6 +344,7 @@ def _generate_follow_up_questions(user_message: str, bot_reply: str) -> list[str
     except Exception as e:
         logger.warning("Follow-up question generation failed (non-fatal): %s", e)
 
+    # Fallback questions are generic but still useful
     return [
         "How does this compare to other months?",
         "Can you break this down further?",
@@ -317,24 +352,27 @@ def _generate_follow_up_questions(user_message: str, bot_reply: str) -> list[str
     ]
 
 
-def _generate_sql_candidates(message: str, schema: str, n: int = TOT_NUM_CANDIDATES) -> list[str]:
-    #TOT branch step: generate N distinct SQL candidates in a single call
-    #temp of 0.7 encourages multiple interpretations
-    #returns a list of raw SQL strings, or [] on parse failure
+# ── Tree-of-Thought SQL pipeline ──────────────────────────────────────────────
 
+def _generate_sql_candidates(message: str, schema: str, n: int = TOT_NUM_CANDIDATES) -> list[str]:
+    """
+    ToT Branch step: ask the model to generate N distinct SQL queries in one call.
+
+    Temperature 0.4 is deliberately non-zero so the model explores different
+    interpretations of the question rather than repeating the same query N times.
+
+    Returns a list of raw SQL strings, or an empty list if parsing fails.
+    """
     prompt = _TOT_SQL_CANDIDATES_PROMPT.format(n=n, table=TABLE)
     resp = client.chat.completions.create(
         model="gpt-5.4",
-        temperature = 0.4,
+        temperature=0.4,
         messages=[
-          {"role": "system", "content": prompt},
-          {"role": "user", "content": f"Schema:\n{schema}\n\nQuestion: {message}"},  
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Schema:\n{schema}\n\nQuestion: {message}"},
         ],
     )
-    raw = resp.choices[0].message.content.strip()
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
-    if fence_match:
-        raw = fence_match.group(1).strip()
+    raw = _strip_json_fence(resp.choices[0].message.content.strip())
     try:
         candidates = json.loads(raw)
         if isinstance(candidates, list) and all(isinstance(c, str) for c in candidates):
@@ -348,9 +386,12 @@ def _generate_sql_candidates(message: str, schema: str, n: int = TOT_NUM_CANDIDA
 
 def _select_best_sql(message: str, schema: str, candidates: list[str]) -> tuple[str, str]:
     """
-    ToT Evaluate step: present all N candidates to the model and ask it to
-    reason comparatively. Returns (best_sql, reason).
-    temperature=0 so the judge is deterministic.
+    ToT Evaluate step: present all N candidates to the model and select the best.
+
+    The model acts as a judge, scoring each candidate 1-10 and picking the winner.
+    Temperature 0 makes the judgment deterministic (same input → same choice).
+
+    Returns (best_sql, reason_string).
     """
     candidates_text = "\n\n".join(
         f"Candidate {i}:\n{sql}" for i, sql in enumerate(candidates)
@@ -371,24 +412,28 @@ def _select_best_sql(message: str, schema: str, candidates: list[str]) -> tuple[
             },
         ],
     )
-    raw = resp.choices[0].message.content.strip()
-    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
-    if fence_match:
-        raw = fence_match.group(1).strip()
+    raw = _strip_json_fence(resp.choices[0].message.content.strip())
     try:
         result = json.loads(raw)
         best_idx = int(result.get("best_index", 0))
         reason = result.get("reason", "")
         scores = result.get("scores", [])
-        best_idx = max(0, min(best_idx, len(candidates) - 1))  # clamp to valid range
+        # Clamp to valid range in case the model returns an out-of-bounds index
+        best_idx = max(0, min(best_idx, len(candidates) - 1))
         logger.info("ToT selected candidate %d (scores=%s) — %s", best_idx, scores, reason)
         return candidates[best_idx], reason
     except (json.JSONDecodeError, KeyError, ValueError):
         logger.warning("ToT evaluation failed to parse; using candidate 0")
         return candidates[0], "fallback to first candidate"
 
+
 def _generate_sql_single_shot(message: str, schema: str) -> str:
-    """Original single-shot SQL generation — used as ToT fallback."""
+    """
+    Single-shot SQL generation — the original approach before ToT was added.
+
+    Used as a fallback when ToT produces fewer than 2 valid candidates.
+    Temperature 0 ensures deterministic output for the same question.
+    """
     resp = client.chat.completions.create(
         model="gpt-5.4",
         temperature=0,
@@ -401,10 +446,15 @@ def _generate_sql_single_shot(message: str, schema: str) -> str:
     _validate_sql(sql)
     return sql
 
+
 def _generate_sql_with_tot(message: str, schema: str) -> str:
     """
-    Full ToT pipeline: Branch → Evaluate → Select.
-    Falls back to single-shot if TOT_ENABLED=False or too few valid candidates.
+    Full Tree-of-Thought pipeline: Branch → Validate → Evaluate → Select.
+
+    Degrades gracefully at each step:
+    - If TOT_ENABLED is False, skip straight to single-shot.
+    - If fewer than 2 valid candidates survive validation, use single-shot.
+    - If the evaluation step fails to parse, pick candidate 0.
     """
     if not TOT_ENABLED:
         return _generate_sql_single_shot(message, schema)
@@ -415,7 +465,7 @@ def _generate_sql_with_tot(message: str, schema: str) -> str:
         logger.warning("ToT produced fewer than 2 candidates; falling back to single-shot")
         return _generate_sql_single_shot(message, schema)
 
-    # Validate each candidate and discard any unsafe ones
+    # Discard any candidates that contain forbidden DML/DDL statements
     clean_candidates: list[str] = []
     for raw_sql in candidates:
         try:
@@ -434,25 +484,43 @@ def _generate_sql_with_tot(message: str, schema: str) -> str:
     logger.info("ToT winner reason: %s", reason)
     return best_sql
 
+
+# ── Public entry point ────────────────────────────────────────────────────────
+
 def get_data_chat_response(message: str) -> dict:
     """
-    Multi-step data-aware chat:
-      1. GPT generates SQL from the user's question + schema.
-      2. Execute the SQL read-only against the finance DB.
-      3. GPT summarises the results in plain English.
-      4. GPT generates structured chart data (if applicable).
+    Run the full multi-step data-aware chat pipeline for a user question.
 
-    Returns: {"text": str, "chart_data": dict | None}
+    Steps:
+      1. Fetch (or return cached) table schema.
+      2. Generate SQL via the ToT pipeline (falls back to single-shot).
+      3. Execute the SQL read-only and sanitise NaN / Inf float values.
+      4. Ask GPT to summarise the rows in plain English with markdown formatting.
+      5. Generate a chart spec (non-blocking; None on failure).
+      6. Generate follow-up questions (non-blocking; hardcoded fallback on failure).
+
+    Returns:
+        {
+            "text": str,                   # GPT's plain-English answer
+            "chart_data": dict | None,     # Recharts-compatible spec, or None
+            "follow_up_questions": list[str]
+        }
+
+    Raises:
+        Any exception from the SQL execution or GPT answer step propagates up
+        to the route handler, which converts it to a 500 response.
     """
     try:
         schema = get_table_schema()
         logger.info("Schema fetched OK")
 
-        # Step 1 — Tree of Thought SQL generation
+        # Step 1 — Tree-of-Thought SQL generation
         sql = _generate_sql_with_tot(message, schema)
         logger.info("Final SQL (ToT): %s", sql)
 
-        # Step 2 — execute the query
+        # Step 2 — Execute the query and sanitise floating-point edge cases.
+        # PostgreSQL can return IEEE 754 NaN/Inf which json.dumps cannot serialise,
+        # so we replace them with 0 before handing the rows to GPT.
         with finance_engine.connect() as conn:
             result = conn.execute(text(sql))
             columns = list(result.keys())
@@ -463,7 +531,7 @@ def get_data_chat_response(message: str) -> dict:
             ]
         logger.info("Query returned %d rows", len(rows))
 
-        # Step 3 — ask GPT to answer in English
+        # Step 3 — Ask GPT to answer in plain English
         answer_resp = client.chat.completions.create(
             model="gpt-5.4",
             messages=[
@@ -473,6 +541,7 @@ def get_data_chat_response(message: str) -> dict:
                     "content": (
                         f"User question: {message}\n\n"
                         f"SQL used:\n{sql}\n\n"
+                        # Cap at 200 rows; the prompt would be too large otherwise
                         f"Results ({len(rows)} rows):\n{json.dumps(rows[:200], default=str, ensure_ascii=True)}"
                     ),
                 },
@@ -480,11 +549,10 @@ def get_data_chat_response(message: str) -> dict:
         )
         text_reply = answer_resp.choices[0].message.content
 
-        # Step 4 — generate chart data (non-blocking; failures return None)
+        # Steps 4 & 5 — Chart and follow-ups are best-effort; failures return defaults
         chart_data = _generate_chart_data(message, sql, rows)
         logger.info("Chart data generated: %s", "yes" if chart_data else "no")
 
-        # Step 5 — generate follow-up questions (non-blocking; uses fallback on failure)
         follow_up_questions = _generate_follow_up_questions(message, text_reply)
 
         return {"text": text_reply, "chart_data": chart_data, "follow_up_questions": follow_up_questions}

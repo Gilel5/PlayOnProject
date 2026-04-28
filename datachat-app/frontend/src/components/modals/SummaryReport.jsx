@@ -2,7 +2,7 @@
 // Revenue Breakdown, Processor Transaction Pivot, and New Purchase by Day reports
 
 import { useContext } from "react";
-import { DarkModeContext } from "./DarkModeContext";
+import { DarkModeContext } from "../DarkModeContext";
 
 const fmt = (v) => {
   if (v == null) return "-";

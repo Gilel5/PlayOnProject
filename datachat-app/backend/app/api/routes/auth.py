@@ -1,4 +1,13 @@
-# Defines the HTTP endpoints under /auth
+"""
+Authentication route handlers (/auth prefix).
+
+Implements a stateless access-token + rotating refresh-token scheme:
+  - Access tokens are short-lived JWTs returned in the JSON response body.
+  - Refresh tokens are longer-lived JWTs stored as HttpOnly cookies so
+    JavaScript cannot read them (XSS mitigation).
+  - Each refresh rotates the token — the old one is revoked and a new one
+    is issued, limiting the damage window if a token is stolen.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -23,12 +32,20 @@ from app.services.auth_services import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# auto_error=False so we can return a custom 401 instead of FastAPI's default
 bearer = HTTPBearer(auto_error=False)
 
 REFRESH_COOKIE = "refresh_token"
 
-def set_refresh_cookie(resp: Response, refresh: str):
-    #refresh tokens should be httpOnly so JS can't read them
+
+def set_refresh_cookie(resp: Response, refresh: str) -> None:
+    """
+    Write the refresh token into a secure, HttpOnly cookie.
+
+    HttpOnly prevents client-side JavaScript from reading the token,
+    which is the primary XSS mitigation for refresh tokens.
+    The cookie is scoped to /auth so it isn't sent on every API request.
+    """
     resp.set_cookie(
         key=REFRESH_COOKIE,
         value=refresh,
@@ -37,15 +54,16 @@ def set_refresh_cookie(resp: Response, refresh: str):
         samesite="lax",
         domain=settings.COOKIE_DOMAIN,
         path="/auth",
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60, 
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
     )
 
-def clear_refresh_cookie(resp: Response):
-    #Delete refresh cookie on logout
+
+def clear_refresh_cookie(resp: Response) -> None:
+    """Delete the refresh token cookie on the client (logout / account deletion)."""
     resp.delete_cookie(
         key=REFRESH_COOKIE,
         domain=settings.COOKIE_DOMAIN,
-        path="/auth"
+        path="/auth",
     )
 
 
@@ -53,6 +71,12 @@ def get_current_user(
     creds: HTTPAuthorizationCredentials | None,
     db: Session,
 ) -> User:
+    """
+    Resolve the Bearer token from the Authorization header to a User row.
+
+    Raises HTTPException 401 if the token is missing, invalid, or the
+    corresponding user no longer exists in the database.
+    """
     if not creds:
         raise HTTPException(status_code=401, detail="Missing access token")
     try:
@@ -65,36 +89,38 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
-    
+
+
 @router.post("/register", response_model=TokenOut)
 def register(data: RegisterIn, resp: Response, db: Session = Depends(get_db)):
-    ##Register:
-        #create user row in DB
-        # issue tokens
-        # set refresh token cookie
-        # return access token JSON
+    """
+    Create a new user account and return an access token.
+
+    On success: creates the user row, issues an access + refresh token pair,
+    sets the refresh token as an HttpOnly cookie, and returns the access token.
+    Returns 400 if the email is already registered.
+    """
     try:
         user = register_user(db, data.email, data.password)
     except ValueError as e:
-        #400 for user-created error (already registered)
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     access, refresh = issue_tokens(db, user)
     set_refresh_cookie(resp, refresh)
     return TokenOut(access_token=access)
 
+
 @router.post("/login", response_model=TokenOut)
 def login(data: LoginIn, resp: Response, db: Session = Depends(get_db)):
-    #Login:
-    # verify email/password
-    # issue tokens
-    # set refresh token cookie
-    # return access token JSON
+    """
+    Authenticate with email + password and return a new access token.
 
+    Returns 401 if the credentials are invalid or the account is inactive.
+    """
     user = authenticate_user(db, data.email, data.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    
+
     access, refresh = issue_tokens(db, user)
     set_refresh_cookie(resp, refresh)
     return TokenOut(access_token=access)
@@ -102,11 +128,13 @@ def login(data: LoginIn, resp: Response, db: Session = Depends(get_db)):
 
 @router.post("/refresh", response_model=TokenOut)
 def refresh(req: Request, resp: Response, db: Session = Depends(get_db)):
-    #refresh:
-        # reading refresh token from cookie
-        # validate and rotate refresh token
-        # set new refresh cookie 
-        # return new access token
+    """
+    Exchange a valid refresh-token cookie for a new access + refresh token pair.
+
+    The old refresh token is revoked immediately (rotation), limiting the
+    window of exposure if a token is ever compromised.
+    Returns 401 if the cookie is missing or the token is invalid/revoked.
+    """
     token = req.cookies.get(REFRESH_COOKIE)
     if not token:
         raise HTTPException(status_code=401, detail="Missing refresh token")
@@ -119,12 +147,12 @@ def refresh(req: Request, resp: Response, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-
 def logout(req: Request, resp: Response, db: Session = Depends(get_db)):
-    # Logout:
-        # revoke refresh token in DB
-        #clear refresh cookie
+    """
+    Revoke the current refresh token and clear the cookie.
 
+    Safe to call even if the cookie is already gone — no-ops gracefully.
+    """
     token = req.cookies.get(REFRESH_COOKIE)
     if token:
         revoke_refresh(db, token)
@@ -134,9 +162,7 @@ def logout(req: Request, resp: Response, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserOut)
 def me(creds: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)):
-    #Current user endpoint
-        # requires authorization
-        #decode token and load user from DB
+    """Return the profile of the currently authenticated user."""
     return get_current_user(creds, db)
 
 
@@ -146,24 +172,22 @@ def delete_my_account(
     creds: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ):
+    """
+    Permanently delete the current user's account and all associated data.
+
+    Deletes in order: refresh tokens → chat sessions (cascades messages) → user row.
+    Clears the refresh cookie so the client is immediately signed out.
+    """
     user = get_current_user(creds, db)
 
     try:
-        # Delete all refresh tokens for this user
         db.query(RefreshToken).filter(RefreshToken.user_id == user.id).delete()
-
-        # Delete all chat sessions for this user
-        # Chat messages should be deleted via DB cascade from chat_sessions -> chat_messages
+        # Chat messages are deleted via DB-level cascade from chat_sessions
         db.query(ChatSession).filter(ChatSession.user_id == user.id).delete()
-
-        # Delete the user row itself
         db.delete(user)
-
         db.commit()
         clear_refresh_cookie(resp)
-
         return {"deleted": True}
-
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
@@ -175,6 +199,7 @@ def update_my_display_name(
     creds: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ):
+    """Update the display name for the current user. Minimum 2 characters."""
     user = get_current_user(creds, db)
     new_name = body.display_name.strip()
     if len(new_name) < 2:
@@ -193,8 +218,13 @@ def change_my_password(
     creds: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: Session = Depends(get_db),
 ):
-    # Change password for the currently authenticated user.
-    # Requires current password. Revokes all refresh tokens and clears the cookie.
+    """
+    Change the password for the current user.
+
+    Requires the existing password for verification. On success, revokes all
+    active refresh tokens (signing out all other sessions) and clears the
+    current refresh cookie so the user must log in again.
+    """
     user = get_current_user(creds, db)
     try:
         change_user_password(db, user, body.current_password, body.new_password)

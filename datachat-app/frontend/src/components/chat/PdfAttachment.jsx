@@ -1,6 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { useContext } from "react";
-import { DarkModeContext } from "./DarkModeContext";
+import { DarkModeContext } from "../DarkModeContext";
 
 export default function PdfAttachment({ name }) {
   const { darkMode } = useContext(DarkModeContext);

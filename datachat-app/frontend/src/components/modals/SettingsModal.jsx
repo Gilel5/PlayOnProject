@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useContext } from "react";
-import { DarkModeContext } from "./DarkModeContext"
+import { DarkModeContext } from "../DarkModeContext"
 import { X, User, Lock, LogOut, Trash2, Sun, MoreHorizontal, Pencil } from "lucide-react";
-import { getArchivedSessions } from "../api/chatSessions";
+import { getArchivedSessions } from "../../api/chatSessions";
 
 export default function SettingsModal({ user, onClose, onLogout, onDelete, onRestoreChat, changeName, changePassword, changeEmail }) {
   const { darkMode, setDarkMode } = useContext(DarkModeContext);

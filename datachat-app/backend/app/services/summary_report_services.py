@@ -1,3 +1,18 @@
+"""
+Excel summary report generation service.
+
+Produces a multi-sheet .xlsx workbook from the finance table using openpyxl.
+The workbook has three sheets:
+  1. Revenue Breakdown   — transaction type totals, new purchases, rebills, revenue share.
+  2. Processor Transaction Pivot — base amount, processor fees, and pass counts by type.
+  3. New Purchase by Day — daily purchase counts and revenue within the selected period.
+
+Supports three report scopes:
+  - annual      — all transactions in a given calendar year.
+  - single_month— all transactions in one calendar month.
+  - multimonth  — each month in a date range as a side-by-side column group.
+"""
+
 from __future__ import annotations
 
 import io
@@ -11,12 +26,16 @@ from app.db.finance_session import finance_engine
 from app.services.openai_services import TABLE
 
 
+# ── Date helpers ──────────────────────────────────────────────────────────────
+
 def _month_label(month_str: str) -> str:
+    """Convert a 'YYYY-MM' string to a human-readable label like 'Jan 2024'."""
     dt = datetime.strptime(month_str, "%Y-%m")
     return dt.strftime("%b %Y")
 
 
 def _next_month(month_str: str) -> str:
+    """Return the 'YYYY-MM' string for the month immediately following month_str."""
     dt = datetime.strptime(month_str, "%Y-%m")
     year = dt.year + (1 if dt.month == 12 else 0)
     month = 1 if dt.month == 12 else dt.month + 1
@@ -24,6 +43,10 @@ def _next_month(month_str: str) -> str:
 
 
 def _month_range_list(start_month: str, end_month: str) -> list[str]:
+    """
+    Build an ordered list of 'YYYY-MM' strings from start_month to end_month
+    inclusive. Used to iterate over months when building a multimonth report.
+    """
     months = []
     current = start_month
     while current <= end_month:
@@ -32,7 +55,25 @@ def _month_range_list(start_month: str, end_month: str) -> list[str]:
     return months
 
 
-def _run_queries(conn, where_sql: str, params: dict):
+# ── Data fetching ─────────────────────────────────────────────────────────────
+
+def _run_queries(conn, where_sql: str, params: dict) -> dict:
+    """
+    Execute all report queries for a single time period and return the results.
+
+    All queries share the same WHERE clause (where_sql + params) so the same
+    function works for annual, monthly, or any arbitrary date range.
+
+    Returns a dict with keys:
+      revenue_by_type   — totals by processor_transaction_type (Charge/Dispute/Fee/Refund)
+      refund_stats      — aggregate refund amount and refund rate inputs
+      new_purchase      — revenue and subscriber count by pass_name for new purchases
+      rebill            — revenue and subscriber count by pass_name for rebills
+      monthly_rebill    — rebill revenue broken down by billing_number
+      revenue_share     — revenue and rev-share amount grouped by attribution_method
+      processor_pivot   — base amount, processor fees, pass count by transaction type
+      purchase_by_day   — daily new-purchase count and revenue
+    """
     revenue_by_type = conn.execute(text(f"""
         SELECT
             processor_transaction_type,
@@ -146,6 +187,8 @@ def _run_queries(conn, where_sql: str, params: dict):
     }
 
 
+# ── Workbook builder ──────────────────────────────────────────────────────────
+
 def generate_summary_reports(
     report_type: str,
     year: int | None = None,
@@ -153,9 +196,23 @@ def generate_summary_reports(
     start_month: str | None = None,
     end_month: str | None = None,
 ) -> bytes:
+    """
+    Build a styled .xlsx workbook for the requested time period and return it
+    as raw bytes suitable for streaming to the client.
+
+    Args:
+        report_type:  One of "annual", "single_month", or "multimonth".
+        year:         Calendar year (annual only).
+        month:        "YYYY-MM" string (single_month only).
+        start_month:  "YYYY-MM" start of range (multimonth only).
+        end_month:    "YYYY-MM" end of range, inclusive (multimonth only).
+
+    Raises ValueError for invalid report_type or missing required parameters.
+    """
+    # ── Shared cell styles ────────────────────────────────────────────────────
     header_font = Font(bold=True, size=11)
-    header_fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
-    total_fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+    # header_fill and total_fill share the same colour — one definition used for both
+    accent_fill = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
     total_font = Font(bold=True, size=11)
     section_font = Font(bold=True, size=12)
     title_font = Font(bold=True, size=14)
@@ -169,21 +226,24 @@ def generate_summary_reports(
     )
 
     def style_header(ws, row, start_col, cols):
+        """Apply bold + accent fill + border + center alignment to a header row."""
         for c in range(start_col, start_col + cols):
             cell = ws.cell(row=row, column=c)
             cell.font = header_font
-            cell.fill = header_fill
+            cell.fill = accent_fill
             cell.border = thin_border
             cell.alignment = Alignment(horizontal="center")
 
     def style_row(ws, row, start_col, cols, is_total=False):
+        """Apply border to a data row; optionally apply bold + accent fill for totals."""
         for c in range(start_col, start_col + cols):
             cell = ws.cell(row=row, column=c)
             cell.border = thin_border
             if is_total:
                 cell.font = total_font
-                cell.fill = total_fill
+                cell.fill = accent_fill
 
+    # ── Fetch data for each time period ──────────────────────────────────────
     with finance_engine.connect() as conn:
         if report_type == "annual":
             if not year:
@@ -222,6 +282,7 @@ def generate_summary_reports(
         else:
             raise ValueError("Invalid report_type")
 
+    # ── Build workbook sheets ─────────────────────────────────────────────────
     wb = Workbook()
     ws1 = wb.active
     ws1.title = "Revenue Breakdown"
@@ -229,6 +290,7 @@ def generate_summary_reports(
     ws3 = wb.create_sheet("New Purchase by Day")
 
     def write_revenue_block(ws, start_col, label, data):
+        """Write the Revenue Breakdown section into ws starting at start_col."""
         for col in range(start_col, start_col + 3):
             ws.column_dimensions[chr(64 + col)].width = 22
 
@@ -361,6 +423,7 @@ def generate_summary_reports(
                 r += 1
 
     def write_processor_block(ws, start_col, label, data):
+        """Write the Processor Transaction Pivot section into ws starting at start_col."""
         for col in range(start_col, start_col + 4):
             ws.column_dimensions[chr(64 + col)].width = 22
 
@@ -394,6 +457,7 @@ def generate_summary_reports(
         style_row(ws, r, start_col, 4, is_total=True)
 
     def write_purchase_day_block(ws, start_col, label, data):
+        """Write the New Purchase by Day section into ws starting at start_col."""
         for col in range(start_col, start_col + 3):
             ws.column_dimensions[chr(64 + col)].width = 18
 
@@ -427,6 +491,7 @@ def generate_summary_reports(
     ws3.cell(1, 1, "New Purchase by Day").font = title_font
 
     if report_type == "multimonth":
+        # Each month occupies a fixed-width column group; groups sit side by side
         revenue_width = 4
         processor_width = 5
         purchase_width = 4
