@@ -17,6 +17,7 @@ DataChat is a full-stack web application designed to help users instantly analyz
 - **File uploads** — CSV support, parsed directly into Supabase with upload progress tracking
 - **Summary reports** — export multi-sheet `.xlsx` reports generated via pandas
 - **Export chats** — download conversations as `.txt` or `.pdf`
+- **Visualization** - each query provides a chart to supplement the insights
 - **Light & dark mode** — full Tailwind-based theme support throughout
 
 ---
@@ -27,6 +28,7 @@ We have split the documentation into specific guides for easier reading:
 
 - **[Setup & Installation Guide](SETUP.md)**: Step-by-step instructions for running DataChat locally, including environment variables and database setup.
 - **[Architecture Notes](ARCHITECTURE.md)**: An overview of the project's structure, technology stack, and how the frontend and backend communicate.
+- **[Detailed Design Document](Detailed%20Design%20Document.pdf)**: A detailed report into the design decisions and backend functionality.
 
 ---
 
