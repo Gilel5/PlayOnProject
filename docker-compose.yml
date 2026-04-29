@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./datachat-app/backend
+      dockerfile: Dockerfile
+    container_name: datachat_backend
+    ports:
+      - "8000:8000"
+    # Mount the .env file if it exists, otherwise it will use default/empty env vars
+    env_file:
+      - ./datachat-app/backend/.env
+    # Optional: bind mount for hot-reloading in dev (commented out by default for prod)
+    # volumes:
+    #   - ./datachat-app/backend:/app
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./datachat-app/frontend
+      dockerfile: Dockerfile
+      args:
+        # The browser needs to connect to the backend via the host's localhost port mapping
+        - VITE_API_BASE=http://localhost:8000
+    container_name: datachat_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

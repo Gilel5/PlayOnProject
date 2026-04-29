@@ -106,7 +106,7 @@ export async function changePassword(accessToken, currentPassword, newPassword) 
 }
 
 export async function deleteMyAccount(accessToken) {
-  const res = await fetch("http://localhost:8000/auth/me", {
+  const res = await fetch(`${import.meta.env.VITE_API_BASE}/auth/me`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${accessToken}`,
