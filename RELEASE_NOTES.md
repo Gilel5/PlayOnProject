@@ -14,6 +14,11 @@ DataChat v1.0 marks the primary initial release of the platform. This release in
 - **Export Capabilities**: Export entire chat histories to standard `.txt` files or visually accurate `.pdf` documents.
 - **Theming**: Comprehensive Light and Dark mode UI support using Tailwind CSS.
 
+### Bug Fixes Made During Development
+- **"Ghost Chat" Initialization**: Fixed a bug where a new user with zero sessions would be shown a broken, un-interactive chat interface by automatically initializing a default session on first login.
+- **Chart Generation**: Fixed a bug where charts were not properly being generated for queries.
+- **UI Inconsistencies**: Fixed a bug where Dark Mode colors were not consistent across the application.
+
 ### Known Bugs and Defects
 - **Large Dataset Upload Latency**: Uploading CSV files exceeding 5MB may take several seconds to chunk and insert into the database depending on network and Supabase connection speeds. There is currently no chunk-resume capability if the connection drops.
 - **PDF Theme Inconsistencies**: PDF exports rely on a standard light-mode CSS structure for printability. Users operating in Dark Mode will see their charts exported with light backgrounds to ensure ink-friendly printing.
