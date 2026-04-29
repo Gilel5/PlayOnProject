@@ -27,6 +27,7 @@ We have split the documentation into specific guides for easier reading:
 
 - **[Setup & Installation Guide](SETUP.md)**: Step-by-step instructions for running DataChat locally, including environment variables and database setup.
 - **[Architecture Notes](ARCHITECTURE.md)**: An overview of the project's structure, technology stack, and how the frontend and backend communicate.
+- **[Detailed Design Document}(Detailed Design Document.pdf)**: A detailed report into the design decisions and backend functionality.
 
 ---
 
