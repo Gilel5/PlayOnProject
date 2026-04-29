@@ -409,7 +409,7 @@ export default function ChatArea({
 
   // Invalidate cached file list after a successful upload
   useEffect(() => {
-    if (uploadStatus?.rows_inserted != null) {
+    if (uploadStatus.some((s) => s.rows_inserted != null)) {
       setUploadedFiles(null);
     }
   }, [uploadStatus]);
@@ -448,10 +448,10 @@ export default function ChatArea({
   }
 
   async function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     e.target.value = "";
-    onUploadCsv(file);
+    onUploadCsv(files);
   }
 
   function handleFollowUpQuestion(question) {
@@ -618,13 +618,14 @@ export default function ChatArea({
               ref={fileInputRef}
               type="file"
               accept=".csv"
+              multiple
               className="hidden"
               onChange={handleFileChange}
             />
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handlePaperclipClick}
-                disabled={uploadStatus?.phase === "uploading" || uploadStatus?.phase === "processing"}
+                disabled={uploadStatus.some((s) => s.phase === "uploading" || s.phase === "processing")}
                 className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${darkMode ? "hover:bg-slate-800 text-slate-300 hover:text-slate-100" : "hover:bg-gray-100 text-gray-700 hover:text-gray-600"}`}
                 title="Upload CSV"
               >
