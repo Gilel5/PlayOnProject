@@ -1,3 +1,6 @@
+// NOT IN USE!!!
+// Can delete this file without issues.
+
 import { useContext } from "react";
 import { LayoutTemplate, ExternalLink, Sparkles } from "lucide-react";
 import { DarkModeContext } from "../DarkModeContext";

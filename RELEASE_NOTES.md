@@ -18,10 +18,10 @@ DataChat v1.0 marks the primary initial release of the platform. This release in
 - **"Ghost Chat" Initialization**: Fixed a bug where a new user with zero sessions would be shown a broken, un-interactive chat interface by automatically initializing a default session on first login.
 - **Chart Generation**: Fixed a bug where charts were not properly being generated for queries.
 - **UI Inconsistencies**: Fixed a bug where Dark Mode colors were not consistent across the application.
+- **Chart Exports**: Fixed a bug where charts were not properly being generated for pdf exports.
 
 ### Known Bugs and Defects
 - **Large Dataset Upload Latency**: Uploading CSV files exceeding 5MB may take several seconds to chunk and insert into the database depending on network and Supabase connection speeds. There is currently no chunk-resume capability if the connection drops.
 - **PDF Theme Inconsistencies**: PDF exports rely on a standard light-mode CSS structure for printability. Users operating in Dark Mode will see their charts exported with light backgrounds to ensure ink-friendly printing.
 - **Token Limits on Massive Tables**: If a user asks a highly generic question that returns thousands of rows without natural limits, the LLM may exceed its context window when attempting to generate a conversational summary.
-- **PDF Export Blank Charts**: Recharts SVG animation transitions prevent charts from fully rendering in the DOM before the PDF blob snapshot was taken, resulting in empty frames.
-- **Pie Chart Rendering Bug**: Recharts `<Pie>` component disables animations, causing the chart to ignore `<Cell>` children and render as a single color.
+- **PDF Export: Chart Information Loss**: Charts exported to PDF are rendered as simplified static SVGs rather than full Recharts visualizations. Axis labels, gridlines, tooltips, and legends may differ from the live chart. Recharts relies on a DOM layout engine and ResizeObserver to calculate geometry, making live chart capture unreliable in export contexts. Charts are instead regenerated from raw data using a lightweight SVG renderer, which preserves data accuracy but not full visual fidelity.

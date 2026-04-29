@@ -7,12 +7,12 @@ import { getUploadedFiles } from "../../api/upload";
 import UserMessage from "../messages/UserMessage";
 import BotMessage from "../messages/BotMessage";
 import FollowUpQuestions from "../messages/FollowUpQuestions";
-import ChartBlock from "../messages/ChartBlock";
+import ChartBlock, { chartDataToSvg } from "../messages/ChartBlock";
 import PdfAttachment from "./PdfAttachment";
 import File from "./File";
 import remarkGfm from "remark-gfm";
 
-// New extracted components and utilities
+// Extracted components and utilities
 import ReportModal from "../modals/ReportModal";
 import UploadStatusBar from "./UploadStatusBar";
 import { formatFlattenedTable } from "../../utils/formatters";
@@ -75,10 +75,10 @@ export default function ChatArea({
   const [dsDropdownOpen, setDsDropdownOpen] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState(null);
   const dsDropdownRef = useRef(null);
-  
+
   // Modal state
   const [showReportModal, setShowReportModal] = useState(false);
-    
+
   async function handleGenerateReports(reportType, params) {
     try {
       setIsGeneratingReports(true);
@@ -147,46 +147,19 @@ export default function ChatArea({
     setOpenMenu(null);
     if (!messages || messages.length === 0) return;
 
-    // ── Capture chart SVGs inline from the live DOM (no canvas / no blob URL) ──
-    // Cloning and serializing the SVG directly is the most reliable approach —
-    // no image loading, no CORS taint, works in every browser.
-    function captureChartForMessage(msgId) {
-      try {
-        const wrapper = document.querySelector(`[data-msg-id="${msgId}"]`);
-        if (!wrapper) return null;
-        const svg = wrapper.querySelector('.recharts-surface');
-        if (!svg) return null;
-
-        const clonedSvg = svg.cloneNode(true);
-        const bbox = svg.getBoundingClientRect();
-        const w = Math.max(bbox.width, 600);
-        const h = Math.max(bbox.height, 300);
-        clonedSvg.setAttribute('width', w);
-        clonedSvg.setAttribute('height', h);
-        clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-
-        // White background so it prints cleanly
-        const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        bgRect.setAttribute('width', '100%');
-        bgRect.setAttribute('height', '100%');
-        bgRect.setAttribute('fill', '#ffffff');
-        clonedSvg.insertBefore(bgRect, clonedSvg.firstChild);
-
-        // Return the raw SVG markup — we'll embed it inline in the HTML
-        return new XMLSerializer().serializeToString(clonedSvg);
-      } catch {
-        return null;
-      }
-    }
-
-    // Collect inline SVG strings for every message that has a chart
+    // Capture all charts in parallel
     const chartSvgs = {};
     messages
-      .filter(m => m.role !== 'user' && m.chart_data)
+      .filter(m => m.role !== "user" && m.chart_data)
       .forEach(m => {
-        const svgMarkup = captureChartForMessage(m.id);
-        if (svgMarkup) chartSvgs[m.id] = svgMarkup;
+        const svg = captureChartForMessage(m.id, m.chart_data);
+        if (svg) chartSvgs[m.id] = svg;
       });
+
+    function captureChartForMessage(msgId, chartData) {
+      return chartDataToSvg(chartData);
+    }
+
 
     // Build clean message HTML from raw message data (no DOM clone)
     const messagesHtml = messages.map((msg, idx) => {
@@ -532,44 +505,44 @@ export default function ChatArea({
         </div>
         {/*  Right side of top bar */}
         <div className="flex items-center gap-2">
-            <div className="relative" ref={dsDropdownRef}>
-              <button
-                onClick={handleDsDropdownToggle}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${darkMode ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
-              >
-                <Database size={12} />
-                <span>Uploaded Files</span>
-                <ChevronDown size={12} className={`transition-transform ${dsDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
-              {dsDropdownOpen && (
-                <div className={`absolute right-0 top-full mt-1 w-72 rounded-lg shadow-lg z-50 border overflow-hidden ${darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-gray-200"}`}>
-                  <div className={`px-3 py-2 text-xs font-medium border-b ${darkMode ? "border-slate-700 text-slate-400" : "border-gray-100 text-gray-400"}`}>
-                    Uploaded Files
-                  </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    {uploadedFiles === null ? (
-                      <div className={`px-3 py-4 text-xs text-center ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
-                        Loading...
-                      </div>
-                    ) : uploadedFiles.length === 0 ? (
-                      <div className={`px-3 py-4 text-xs text-center ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
-                        No files uploaded yet.
-                      </div>
-                    ) : (
-                      uploadedFiles.map((f, i) => (
-                        <div key={i} className={`px-3 py-2 text-xs ${darkMode ? "hover:bg-slate-800 border-slate-800" : "hover:bg-gray-50 border-gray-50"} ${i > 0 ? "border-t" : ""}`}>
-                          <div className={`font-medium truncate ${darkMode ? "text-slate-200" : "text-gray-700"}`}>{f.filename}</div>
-                          <div className={`mt-0.5 flex gap-3 ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
-                            <span>{f.rows_inserted.toLocaleString()} rows</span>
-                            <span>{new Date(f.uploaded_at).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+          <div className="relative" ref={dsDropdownRef}>
+            <button
+              onClick={handleDsDropdownToggle}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${darkMode ? "bg-slate-800 text-slate-300 hover:bg-slate-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+            >
+              <Database size={12} />
+              <span>Uploaded Files</span>
+              <ChevronDown size={12} className={`transition-transform ${dsDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            {dsDropdownOpen && (
+              <div className={`absolute right-0 top-full mt-1 w-72 rounded-lg shadow-lg z-50 border overflow-hidden ${darkMode ? "bg-slate-900 border-slate-700" : "bg-white border-gray-200"}`}>
+                <div className={`px-3 py-2 text-xs font-medium border-b ${darkMode ? "border-slate-700 text-slate-400" : "border-gray-100 text-gray-400"}`}>
+                  Uploaded Files
                 </div>
-              )}
-            </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {uploadedFiles === null ? (
+                    <div className={`px-3 py-4 text-xs text-center ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+                      Loading...
+                    </div>
+                  ) : uploadedFiles.length === 0 ? (
+                    <div className={`px-3 py-4 text-xs text-center ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+                      No files uploaded yet.
+                    </div>
+                  ) : (
+                    uploadedFiles.map((f, i) => (
+                      <div key={i} className={`px-3 py-2 text-xs ${darkMode ? "hover:bg-slate-800 border-slate-800" : "hover:bg-gray-50 border-gray-50"} ${i > 0 ? "border-t" : ""}`}>
+                        <div className={`font-medium truncate ${darkMode ? "text-slate-200" : "text-gray-700"}`}>{f.filename}</div>
+                        <div className={`mt-0.5 flex gap-3 ${darkMode ? "text-slate-400" : "text-gray-400"}`}>
+                          <span>{f.rows_inserted.toLocaleString()} rows</span>
+                          <span>{new Date(f.uploaded_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <button className={`p-1.5 rounded-lg transition-colors ${darkMode ? "hover:bg-slate-800" : "hover:bg-gray-100"}`}
             onClick={(e) => handleMenuOpen(e, "current-chat")}
           >
@@ -675,12 +648,12 @@ export default function ChatArea({
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || isLoading}
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${input.trim() && !isLoading
-                  ? darkMode
-                    ? "bg-indigo-500 text-white hover:bg-indigo-600"
-                    : "bg-[#5BC5D0] text-black hover:bg-[#5BC5D0]"
-                  : darkMode
-                    ? "bg-slate-700 text-white cursor-not-allowed"
-                    : "bg-gray-200 text-gray-700 cursor-not-allowed"
+                ? darkMode
+                  ? "bg-indigo-500 text-white hover:bg-indigo-600"
+                  : "bg-[#5BC5D0] text-black hover:bg-[#5BC5D0]"
+                : darkMode
+                  ? "bg-slate-700 text-white cursor-not-allowed"
+                  : "bg-gray-200 text-gray-700 cursor-not-allowed"
                 }`}
             >
               <ArrowUp size={14} />

@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import ChartTypeSelector from "./ChartTypeSelector";
 import { X } from "lucide-react";
+export { SingleChart, LIGHT_COLORS, chartDataToSvg };
 
 // Brand-aligned color palette
 const LIGHT_COLORS = [
@@ -225,6 +226,138 @@ function SingleChart({ chartType, chartData, darkMode, colors, id }) {
       </BarChart>
     </ResponsiveContainer>
   );
+}
+
+function chartDataToSvg(chartData) {
+  console.log("chartData for export:", JSON.stringify(chartData, null, 2));
+  const W = 700, H = 300;
+  const COLORS = ["#5BC5D0","#6366f1","#f59e0b","#10b981","#ef4444","#8b5cf6"];
+  const chartType = chartData.chart_type || "bar";
+  const labels = chartData.labels || [];
+  const datasets = chartData.datasets || [];
+  const PAD = { top: 20, right: 20, bottom: 50, left: 70 };
+  const cW = W - PAD.left - PAD.right;
+  const cH = H - PAD.top - PAD.bottom;
+
+  if (chartType === "pie") {
+    const data = labels.map((label, i) => ({
+      label,
+      value: datasets[0]?.data[i] ?? 0,
+    }));
+    const total = data.reduce((s, d) => s + d.value, 0);
+    const cx = W / 2, cy = (H - 40) / 2 + PAD.top, r = 100, ir = 50;
+    let angle = -Math.PI / 2;
+
+    const slices = data.map((d, i) => {
+      const rawSweep = (d.value / total) * 2 * Math.PI;
+      // Cap sweep to avoid degenerate full-circle arc
+      const sweep = Math.min(rawSweep, 2 * Math.PI - 0.001);
+      const pct = (d.value / total) * 100;
+
+      let path;
+      if (rawSweep >= 2 * Math.PI - 0.001) {
+        // Nearly full circle — draw as two arcs
+        const top = { x: cx, y: cy - r };
+        const bot = { x: cx, y: cy + r };
+        const itop = { x: cx, y: cy - ir };
+        const ibot = { x: cx, y: cy + ir };
+        path = `M ${top.x} ${top.y} A ${r} ${r} 0 1 1 ${bot.x} ${bot.y} A ${r} ${r} 0 1 1 ${top.x} ${top.y}
+                M ${itop.x} ${itop.y} A ${ir} ${ir} 0 1 0 ${ibot.x} ${ibot.y} A ${ir} ${ir} 0 1 0 ${itop.x} ${itop.y} Z`;
+      } else {
+        const x1 = cx + r * Math.cos(angle), y1 = cy + r * Math.sin(angle);
+        const x2 = cx + r * Math.cos(angle + sweep), y2 = cy + r * Math.sin(angle + sweep);
+        const ix1 = cx + ir * Math.cos(angle), iy1 = cy + ir * Math.sin(angle);
+        const ix2 = cx + ir * Math.cos(angle + sweep), iy2 = cy + ir * Math.sin(angle + sweep);
+        const large = sweep > Math.PI ? 1 : 0;
+        path = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix2} ${iy2} A ${ir} ${ir} 0 ${large} 0 ${ix1} ${iy1} Z`;
+      }
+
+      angle += sweep;
+      return { path, color: COLORS[i % COLORS.length], label: d.label, pct: pct.toFixed(1) };
+    });
+
+    const legendItems = slices.map((s, i) => {
+      const x = 20 + (i % 3) * 220;
+      const y = H - 18 + Math.floor(i / 3) * 18;
+      return `<rect x="${x}" y="${y - 8}" width="10" height="10" fill="${s.color}" rx="2"/>
+              <text x="${x + 14}" y="${y}" font-size="11" fill="#6b7280" font-family="Inter,sans-serif">${s.label} (${s.pct}%)</text>`;
+    }).join("");
+
+    const paths = slices.map(s =>
+      `<path d="${s.path}" fill="${s.color}" stroke="#fff" stroke-width="2"/>`
+    ).join("");
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+      <rect width="100%" height="100%" fill="#fff"/>
+      ${paths}
+      ${legendItems}
+    </svg>`;
+  }
+
+  // bar / line / area share axes
+  const allVals = datasets.flatMap(ds => ds.data.filter(v => typeof v === "number"));
+  const minVal = Math.min(0, ...allVals);
+  const maxVal = Math.max(...allVals) * 1.1 || 1;
+  const scaleY = v => PAD.top + cH - ((v - minVal) / (maxVal - minVal)) * cH;
+  const scaleX = i => PAD.left + (i + 0.5) * (cW / labels.length);
+
+  // Y axis ticks
+  const ticks = 5;
+  const yTicks = Array.from({ length: ticks + 1 }, (_, i) => {
+    const v = minVal + (i / ticks) * (maxVal - minVal);
+    const fmt = Math.abs(v) >= 1e6 ? `$${(v/1e6).toFixed(1)}M`
+              : Math.abs(v) >= 1e3 ? `$${(v/1e3).toFixed(1)}K`
+              : v.toFixed(0);
+    return `<line x1="${PAD.left}" x2="${PAD.left + cW}" y1="${scaleY(v)}" y2="${scaleY(v)}" stroke="#e5e7eb" stroke-width="1"/>
+            <text x="${PAD.left - 6}" y="${scaleY(v) + 4}" text-anchor="end" font-size="10" fill="#9ca3af" font-family="Inter,sans-serif">${fmt}</text>`;
+  }).join("");
+
+  // X axis labels
+  const xLabels = labels.map((l, i) =>
+    `<text x="${scaleX(i)}" y="${PAD.top + cH + 16}" text-anchor="middle" font-size="10" fill="#9ca3af" font-family="Inter,sans-serif">${l}</text>`
+  ).join("");
+
+  let series = "";
+
+  if (chartType === "bar") {
+    const bw = (cW / labels.length) * 0.6 / datasets.length;
+    series = datasets.map((ds, di) =>
+      ds.data.map((v, i) => {
+        const x = PAD.left + i * (cW / labels.length) + (di * bw) + (cW / labels.length - bw * datasets.length) / 2;
+        const y = scaleY(Math.max(v, 0));
+        const barH = Math.abs(scaleY(0) - scaleY(v));
+        return `<rect x="${x}" y="${y}" width="${bw}" height="${barH}" fill="${COLORS[di % COLORS.length]}" rx="2"/>`;
+      }).join("")
+    ).join("");
+  } else {
+    // line or area
+    series = datasets.map((ds, di) => {
+      const pts = ds.data.map((v, i) => `${scaleX(i)},${scaleY(v)}`).join(" ");
+      const color = COLORS[di % COLORS.length];
+      if (chartType === "area") {
+        const baseline = scaleY(0);
+        const first = `${scaleX(0)},${baseline}`;
+        const last = `${scaleX(ds.data.length - 1)},${baseline}`;
+        return `<polygon points="${first} ${pts} ${last}" fill="${color}" fill-opacity="0.15"/>
+                <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+      }
+      return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    }).join("");
+  }
+
+  // Legend
+  const legend = datasets.length > 1 ? datasets.map((ds, i) =>
+    `<rect x="${PAD.left + i * 120}" y="${H - 14}" width="10" height="10" fill="${COLORS[i % COLORS.length]}" rx="2"/>
+     <text x="${PAD.left + i * 120 + 14}" y="${H - 5}" font-size="11" fill="#6b7280" font-family="Inter,sans-serif">${ds.label}</text>`
+  ).join("") : "";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <rect width="100%" height="100%" fill="#fff"/>
+    ${yTicks}
+    ${series}
+    ${xLabels}
+    ${legend}
+  </svg>`;
 }
 
 
