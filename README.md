@@ -22,12 +22,32 @@ DataChat is a full-stack web application designed to help users instantly analyz
 
 ---
 
-## Documentation
+## Release Information (v1.0)
 
-We have split the documentation into specific guides for easier reading:
+DataChat v1.0 is the initial release of the platform! We've introduced a complete natural language analytics pipeline, dynamic interactive charting, and full-text search capabilities for your financial data.
 
-- **[Setup & Installation Guide](SETUP.md)**: Step-by-step instructions for running DataChat locally, including environment variables and database setup.
-- **[Architecture Notes](ARCHITECTURE.md)**: An overview of the project's structure, technology stack, and how the frontend and backend communicate.
+For a comprehensive list of features, bug fixes, and known defects in this version, please see our **[Release Notes](RELEASE_NOTES.md)**.
+
+---
+
+## Install Guide (Quickstart)
+
+This is a brief overview to get you up and running quickly. **For the full, detailed prerequisites, dependency lists, and troubleshooting steps, please read the [Complete Install Guide](INSTALL_GUIDE.md).**
+
+1. **Clone the repository:** `git clone https://github.com/Gilel5/PlayOnProject.git`
+2. **Setup Backend:** 
+   Navigate to `backend/`, install dependencies with `pip install -r requirements.txt`, configure your `.env` (Supabase/OpenAI keys), and run `uvicorn app.main:app --reload`.
+3. **Setup Frontend:** 
+   Navigate to `frontend/`, run `npm install`, and start the app with `npm run dev`.
+4. Open your browser to `http://localhost:5173`.
+
+---
+
+## Documentation Links
+
+- **[Install Guide](INSTALL_GUIDE.md)**: Detailed instructions for prerequisites, configuration, and troubleshooting.
+- **[Release Notes](RELEASE_NOTES.md)**: Detailed version history, new features, and known bugs.
+- **[Architecture Notes](ARCHITECTURE.md)**: An overview of the project's structure, technology stack, and backend flow.
 - **[Detailed Design Document](Detailed%20Design%20Document.pdf)**: A detailed report into the design decisions and backend functionality.
 
 ---
