@@ -12,6 +12,7 @@ Upload financial CSVs or PDFs and ask questions about your data in plain English
 - **File uploads** — CSV support, parsed directly into Supabase
 - **Summary reports** — export multi-sheet `.xlsx` reports generated via pandas
 - **Export chats** — download conversations as `.txt` or `.pdf`
+- **Visualization** - each query provides a chart to supplement the insights
 - **Light & dark mode** — full Tailwind-based theme support throughout
 
 ---
