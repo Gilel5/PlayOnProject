@@ -36,9 +36,9 @@ export default function AppHome() {
   const [loadingChats, setLoadingChats] = useState({});
   const [sessions, setSessions] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
-  const [uploadStatus, setUploadStatus] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState([]);
   const [datasource, setDatasource] = useState(null);
-  const abortControllerRef = useRef(null);
+  const abortControllerRef = useRef({});
 
   /** 
    * Initial greeting injected into new or empty chat sessions.
@@ -196,60 +196,109 @@ export default function AppHome() {
     }
   }
 
-  async function handleUploadCsv(file) {
+  function handleUploadCsv(files) {
     const MAX_UPLOAD_SIZE = 1024 * 1024 * 1024; // 1 GB
-    if (file.size > MAX_UPLOAD_SIZE) {
-      setUploadStatus({ error: "File is too large. Maximum size is 1 GB." });
-      setTimeout(() => setUploadStatus(null), 8000);
+    const genId = () => crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // Enforce 3-file limit
+    if (files.length > 3) {
+      const errId = genId();
+      setUploadStatus((prev) => [
+        ...prev,
+        { uploadId: errId, filename: null, error: "Please select up to 3 files at a time." },
+      ]);
+      setTimeout(() => setUploadStatus((prev) => prev.filter((s) => s.uploadId !== errId)), 5000);
       return;
     }
-    abortControllerRef.current = new AbortController();
-    const startedAt = Date.now();
-    const total = file.size;
-    let uploadDone = false;
-    const processingStartedAtRef = { current: null };
-    setUploadStatus({ phase: "uploading", percent: 0, loaded: 0, total, startedAt });
-    try {
-      const result = await uploadCsv(
+
+    // Deduplicate by filename within the batch (keep first occurrence)
+    const seen = new Set();
+    const deduped = files.filter((f) => {
+      if (seen.has(f.name)) return false;
+      seen.add(f.name);
+      return true;
+    });
+
+    deduped.forEach((file) => {
+      if (file.size > MAX_UPLOAD_SIZE) {
+        const uploadId = genId();
+        setUploadStatus((prev) => [...prev, { uploadId, filename: file.name, error: "File is too large. Maximum size is 1 GB." }]);
+        setTimeout(() => setUploadStatus((prev) => prev.filter((s) => s.uploadId !== uploadId)), 8000);
+        return;
+      }
+
+      // Abort any in-progress upload for this filename before starting a new one
+      abortControllerRef.current[file.name]?.abort();
+
+      const uploadId = genId();
+      const controller = new AbortController();
+      abortControllerRef.current[file.name] = controller;
+      const startedAt = Date.now();
+      const total = file.size;
+      let uploadDone = false;
+      const processingStartedAt = { current: null };
+
+      // Replace any existing entry for this filename with the new upload
+      setUploadStatus((prev) => [
+        ...prev.filter((s) => s.filename !== file.name),
+        { uploadId, filename: file.name, phase: "uploading", percent: 0, loaded: 0, total, startedAt },
+      ]);
+
+      uploadCsv(
         file,
         (percent, loaded) => {
           if (percent >= 100) {
             uploadDone = true;
           } else {
-            setUploadStatus({ phase: "uploading", percent, loaded, total, startedAt });
+            setUploadStatus((prev) =>
+              prev.map((s) => s.uploadId === uploadId ? { ...s, percent, loaded } : s)
+            );
           }
         },
         (serverProgress) => {
-          // Ignore server progress until bytes are on the wire, then show it.
           if (!uploadDone) return;
           const { phase, rows_processed = 0, total_rows = 0 } = serverProgress;
           if (phase === "unknown" || phase === "done") return;
-          if (!processingStartedAtRef.current) processingStartedAtRef.current = Date.now();
-          setUploadStatus({
-            phase: "processing",
-            serverPhase: phase,
-            rows_processed,
-            total_rows,
-            startedAt: processingStartedAtRef.current,
-          });
+          if (!processingStartedAt.current) processingStartedAt.current = Date.now();
+          setUploadStatus((prev) =>
+            prev.map((s) =>
+              s.uploadId === uploadId
+                ? { ...s, phase: "processing", serverPhase: phase, rows_processed, total_rows, startedAt: processingStartedAt.current }
+                : s
+            )
+          );
         },
-        abortControllerRef.current.signal,
-      );
-      setUploadStatus(result);
-      setTimeout(() => setUploadStatus(null), 6000);
-    } catch (err) {
-      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
-        setUploadStatus({ error: "Upload cancelled." });
-      } else {
-        const detail = err.response?.data?.detail ?? "Upload failed. Please try again.";
-        setUploadStatus({ error: detail });
-      }
-      setTimeout(() => setUploadStatus(null), 8000);
-    }
+        controller.signal,
+      )
+        .then((result) => {
+          setUploadStatus((prev) =>
+            prev.map((s) => s.uploadId === uploadId ? { uploadId, filename: file.name, ...result } : s)
+          );
+          // Use uploadId so this timeout only removes this specific upload attempt
+          setTimeout(() => setUploadStatus((prev) => prev.filter((s) => s.uploadId !== uploadId)), 6000);
+        })
+        .catch((err) => {
+          const error =
+            err.name === "CanceledError" || err.code === "ERR_CANCELED"
+              ? "Upload cancelled."
+              : err.response?.data?.detail ?? "Upload failed. Please try again.";
+          setUploadStatus((prev) =>
+            prev.map((s) => s.uploadId === uploadId ? { uploadId, filename: file.name, error } : s)
+          );
+          setTimeout(() => setUploadStatus((prev) => prev.filter((s) => s.uploadId !== uploadId)), 8000);
+        })
+        .finally(() => {
+          delete abortControllerRef.current[file.name];
+        });
+    });
   }
 
-  function handleCancelUpload() {
-    abortControllerRef.current?.abort();
+  function handleCancelUpload(filename) {
+    if (filename) {
+      abortControllerRef.current[filename]?.abort();
+    } else {
+      Object.values(abortControllerRef.current).forEach((c) => c.abort());
+    }
   }
 
   async function handleTogglePin(sessionId) {
